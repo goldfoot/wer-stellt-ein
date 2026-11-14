@@ -44,7 +44,7 @@ CITY_RE = [(c, cc, re.compile(rx, re.I)) for c, (cc, rx) in CITIES.items()]
 COUNTRY_RE = {"DE": re.compile(r"(?i:germany|deutschland)|\bDEU?\b"), "AT": re.compile(r"(?i:austria|österreich)|\bAUT\b|\bAT\b"),
               "CH": re.compile(r"(?i:switzerland|schweiz|suisse)|\bCHE?\b")}
 COUNTRY_NAME = {"DE": "Deutschland", "AT": "Österreich", "CH": "Schweiz"}
-REMOTE_ONLY = re.compile(r"\b(remote|anywhere|worldwide|dach|europe|europa|emea|eu|cet|home ?office|mobile arbeit|hybrid|full[- ]?time|\(?[a-z]{2}\)?)\b|[|,;/()\-–\s]+", re.I)
+REMOTE_ONLY = re.compile(r"\b(remote|anywhere|worldwide|dach|europe|europa|emea|eu|cet|home ?office|mobile arbeit|hybrid|full[- ]?time|\(?(?:de|at|ch|eu|dach)\)?)\b|[|,;/()\-–\s]+", re.I)
 
 CATEGORIES = [  # (slug, label, tech?, regex) — first match wins
     ("sales", "Sales & Business Development", False, r"\bsales\b|vertrieb|account (executive|manager)|business development|\bsdr\b|\bbdr\b|key account"),
@@ -241,7 +241,7 @@ def stat_tiles(items):
 def cta(context=""):
     return f"""<aside class="cta"><h3>Hiring-Signale für Ihren Vertrieb</h3>
 <p>Wer gerade {e(context) or "DevOps-, Daten- oder Security-Rollen"} ausschreibt, hat Budget und Bedarf. Wir liefern Ihnen jede Woche eine Liste der Unternehmen aus Ihrer Zielgruppe, die neue passende Stellen veröffentlicht haben, mit Link zur Ausschreibung.</p>
-<p><a class="btn" href="/hiring-signale/">Beispiel-Liste ansehen</a> <a class="btn ghost" href="{CFG["actorUrl"]}" rel="noopener">Selbst abfragen (API)</a></p></aside>"""
+<p><a class="btn" href="/hiring-signale/">Beispiel-Liste ansehen</a> <a class="btn ghost" href="{CFG.get("indexActorUrl", CFG["actorUrl"])}" rel="noopener">Alle Stellen per API durchsuchen</a></p></aside>"""
 
 
 # ---------------------------------------------------------------- pages
@@ -448,7 +448,7 @@ def static_pages():
 <li><b>Δ Woche</b> vergleicht mit dem Stand der Vorwoche.</li>
 <li>Unternehmen, deren Karriereseite über Workday, SuccessFactors o. ä. läuft, sind (noch) nicht enthalten.</li></ul>
 <p>Es werden keine Bewerberdaten oder personenbezogenen Daten erhoben. Jede Stelle verlinkt auf die Originalausschreibung.</p>
-<p>Die Daten stammen aus dem <a href="{CFG["actorUrl"]}">Career Site Jobs Scraper</a>. Entwickler finden Beispiele unter <a href="https://github.com/goldfoot/career-site-jobs-api">github.com/goldfoot/career-site-jobs-api</a>.</p>
+<p>Die Daten stammen aus dem <a href="{CFG["actorUrl"]}">Career Site Jobs Scraper</a>. Den kompletten, wöchentlich aktualisierten DACH-Stellenindex (alle Branchen, mit Filtern für Stadt, Bereich, Remote und Gehalt) gibt es als <a href="{CFG.get("indexActorUrl", CFG["actorUrl"])}">DACH Jobs API</a>. Entwickler finden Beispiele unter <a href="https://github.com/goldfoot/career-site-jobs-api">github.com/goldfoot/career-site-jobs-api</a>.</p>
 <p>Fehlt ein Unternehmen? <a href="{CFG["contactHref"]}">Schreiben Sie uns</a>.</p>"""), crumbs=[("Methodik", None)])
     page("/hiring-signale/", "Hiring-Signale: wöchentliche Lead-Liste für B2B-Vertrieb", "Welche Unternehmen in Ihrer Zielgruppe stellen gerade passende Rollen ein? Wöchentliche Liste als CSV.", md(f"""
 <h1>Hiring-Signale für Ihren Vertrieb</h1>
@@ -458,7 +458,7 @@ def static_pages():
 <li>Gefiltert auf Ihre Rollen (z. B. DevOps, Data, Security, SAP, Salesforce) und Regionen.</li>
 <li>Nur Unternehmensdaten, keine personenbezogenen Kontaktdaten.</li></ul>
 <h2>Selbst machen</h2>
-<p>Technisch versiert? Der <a href="{CFG["actorUrl"]}">Career Site Jobs Scraper</a> liefert dieselben Daten per API, mit „nur neue Stellen“-Modus für wöchentliche Alerts. Abrechnung pro gefundener Stelle.</p>
+<p>Technisch versiert? Die <a href="{CFG.get("indexActorUrl", CFG["actorUrl"])}">DACH Jobs API</a> durchsucht alle Stellen per Stichwort, Stadt, Bereich und Seniorität, mit „nur neue Stellen“-Modus für wöchentliche Alerts. Einzelne Unternehmen live abfragen: <a href="{CFG["actorUrl"]}">Career Site Jobs Scraper</a>. Abrechnung pro gefundener Stelle.</p>
 <h2>Fertig geliefert</h2>
 <p>{CFG["leadOfferText"]}</p>
 <p><a class="btn" href="{CFG["contactHref"]}">Beispiel-Liste anfordern</a></p>"""), crumbs=[("Hiring-Signale", None)])
