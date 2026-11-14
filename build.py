@@ -51,7 +51,7 @@ CATEGORIES = [  # (slug, label, tech?, regex) — first match wins
     ("people", "HR & Recruiting", False, r"recruit|talent acquisition|\bhr\b|people (partner|operations)|personalreferent"),
     ("finance-legal", "Finanzen & Recht", False, r"einkauf|procurement|buyer|purchas|financ|finanz|accounting|buchhalt|controll|\btax\b|steuer|legal|counsel|jurist"),
     ("devops-sre-platform", "DevOps, SRE & Platform", True, r"devops|\bsre\b|site reliability|platform engineer|cloud engineer|infrastructure|kubernetes|systems? engineer"),
-    ("security", "IT-Security", True, r"secur|sicherheit|pentest|\bsoc\b|ciso|iam\b"),
+    ("security", "IT-Security", True, r"(?:it|cyber|information|informations|application|cloud|network|netzwerk|product|app|sap|firmware|data|offensive|ot)[- ]?(?:security|sicherheit)|informationssicherheit|it-sicherheit|cybersecurity|security (?:engineer|architect|analyst|consultant|operations|researcher|specialist|officer|manager|lead|expert)|pentest|penetration|\bsoc\b|ciso|\biam\b|zero trust|incident response|\bisms\b"),
     ("data-ai", "Data, KI & Machine Learning", True, r"\bdata\b|daten|machine learning|\bml\b|\bai\b|\bki\b|analytics engineer|scientist|\bllm|deep learning|computer vision|nlp|bi developer|business intelligence"),
     ("mobile", "Mobile (iOS/Android)", True, r"\bios\b|android|mobile|flutter|react native"),
     ("frontend", "Frontend", True, r"front.?end|\bui engineer|react\b|angular|vue"),
