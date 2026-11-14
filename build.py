@@ -67,6 +67,12 @@ CATEGORIES = [  # (slug, label, tech?, regex) — first match wins
     ("customer", "Customer Success & Support", False, r"customer|kunden|support|onboarding|success"),
     ("finance-legal", "Finanzen & Recht", False, r"financ|finanz|accounting|buchhalt|controll|tax|steuer|legal|recht|compliance|counsel|audit"),
     ("people", "HR & Recruiting", False, r"recruit|talent|\bhr\b|people|personal"),
+    ("healthcare", "Gesundheit & Pflege", False, r"pflege|krankenschwester|gesundheits|\bmfa\b|medizinische[rn]? fachangestellte|zahnmedizin|\bzfa\b|arzt|ärztin|physiotherap|ergotherap|apothe|therapeut|klinik|praxis"),
+    ("education-social", "Bildung & Soziales", False, r"erzieher|pädagog|sozialarbeit|heilerzieh|kita\b|lehrer|lehrkraft|dozent|ausbilder|betreuer"),
+    ("retail", "Handel & Verkauf", False, r"verkäufer|verkauf\b|filial|kassierer|einzelhandel|store manager|markt|retail"),
+    ("logistics", "Logistik, Lager & Fahrer", False, r"lager|logistik|logistic|warehouse|kommission|fahrer|zusteller|kurier|disponent|spedition|versand"),
+    ("hospitality", "Gastronomie & Hotellerie", False, r"\bkoch\b|köchin|küche|gastronom|restaurant|hotel|rezeption|servicekraft|kellner|housekeeping"),
+    ("trades", "Handwerk & Technik", False, r"elektriker|elektroniker|mechaniker|mechatroniker|monteur|installateur|schlosser|schweißer|tischler|maler|handwerk|servicetechniker|kfz|haustechnik|hausmeister|anlagenführer|produktionsmitarbeiter|cnc"),
     ("engineering-other", "Ingenieurwesen & sonstige Technik", True, r"engineer|ingenieur|konstrukt|\bcad\b|entwicklung|technik|techniker|scientist|forsch|research|r&d"),
     ("operations", "Operations & Sonstiges", False, r"."),
 ]
@@ -134,8 +140,37 @@ def load_jobs():
                      "postedAt": (j.get("postedAt") or "")[:10] or None, "department": j.get("department"),
                      "salaryText": j.get("salaryText"), "salaryMin": j.get("salaryMin"), "salaryMax": j.get("salaryMax"),
                      "salaryCurrency": j.get("salaryCurrency"), "salaryInterval": j.get("salaryInterval"),
-                     "domain": j.get("input"), **c})
+                     "domain": j.get("input"), "track": "ausbildung" if AUSBILDUNG_RE.search(j["title"]) else "werkstudent" if STUDENT_JOB_RE.search(j["title"]) else None, **c})
     return jobs
+
+
+AUSBILDUNG_RE = re.compile(r"ausbildung|azubi|auszubildende|duales studium|dualer student|duale[rs]? studi|apprentice", re.I)
+STUDENT_JOB_RE = re.compile(r"werkstudent|working student|praktik|internship|\bintern\b|abschlussarbeit|thesis|masterarbeit|bachelorarbeit", re.I)
+CITY_COUNTRY = {}
+
+
+def load_index_jobs():
+    """Jobs from the DACH Jobs API index (data/index-latest.json, written by fetch.py --index): already DACH-filtered and classified."""
+    idx = json.loads((DATA / "index-latest.json").read_text())
+    jobs = []
+    cc = defaultdict(Counter)
+    for j in idx["jobs"]:
+        name = j["company"].strip()
+        for c in j["cities"]:
+            for k in j["countries"]:
+                cc[c][k] += 1
+        level = {"student": "junior"}.get(j["seniority"], j["seniority"])
+        title = j["title"].strip()
+        jobs.append({"uid": j["id"], "company": slugify(name), "companyName": name, "title": title, "url": j.get("url"),
+                     "ats": j.get("ats"), "location": j.get("location") or "", "postedAt": (j.get("postedAt") or "")[:10] or None,
+                     "firstSeen": (j.get("firstSeenAt") or "")[:10] or None, "department": j.get("department"),
+                     "salaryText": j.get("salaryText"), "salaryMin": j.get("salaryMin"), "salaryMax": j.get("salaryMax"),
+                     "salaryCurrency": j.get("salaryCurrency"), "salaryInterval": j.get("salaryInterval"), "domain": j.get("companyWebsite"),
+                     "cities": j["cities"], "countries": j["countries"], "remote": j.get("workplace") == "remote", "hybrid": j.get("workplace") == "hybrid",
+                     "cat": j["category"], "level": level,
+                     "track": "ausbildung" if AUSBILDUNG_RE.search(title) else "werkstudent" if STUDENT_JOB_RE.search(title) else None})
+    CITY_COUNTRY.update({c: k.most_common(1)[0][0] for c, k in cc.items()})
+    return jobs, idx["updatedAt"][:10]
 
 
 def load_snapshots():
@@ -167,6 +202,27 @@ def n(x):
     return f"{x:,}".replace(",", ".")
 
 
+MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."]
+
+
+def month_label(d):
+    y, m, _ = d.split("-")
+    return f"{MONTHS[int(m) - 1]} {y}"
+
+
+def fit_title(*variants, limit=60):
+    """First variant that fits Google's ~60-char title width; else the shortest, cut at a word."""
+    for v in variants:
+        if len(v) <= limit:
+            return v
+    v = min(variants, key=len)
+    return v if len(v) <= limit else v[:limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def fit_desc(s, limit=155):
+    return s if len(s) <= limit else s[:limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
 def delta(cur, prev):
     if prev is None:
         return ""
@@ -178,6 +234,7 @@ def delta(cur, prev):
 
 def page(path, title, desc, body, crumbs=(), jsonld=None):
     url = f"{BASE}{path}"
+    desc = fit_desc(desc)
     crumb_html = ""
     if crumbs:
         parts = ['<a href="/">Start</a>'] + [f'<a href="{h}">{e(t)}</a>' if h else f"<span>{e(t)}</span>" for t, h in crumbs]
@@ -193,7 +250,7 @@ def page(path, title, desc, body, crumbs=(), jsonld=None):
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}"><meta property="og:url" content="{url}"><meta property="og:type" content="website">
 <link rel="stylesheet" href="/style.css"><link rel="icon" href="/favicon.svg" type="image/svg+xml">{ld}</head>
 <body><header class="top"><div class="wrap"><a class="brand" href="/">{e(CFG["brand"])}</a>
-<nav><a href="/jobs/">Bereiche</a><a href="/staedte/">Städte</a><a href="/unternehmen/">Unternehmen</a><a href="/ats/">ATS</a><a href="/hiring-signale/" class="cta-link">Hiring-Signale</a></nav></div></header>
+<nav><a href="/jobs/">Bereiche</a><a href="/staedte/">Städte</a><a href="/unternehmen/">Unternehmen</a><a href="/ausbildung/">Ausbildung</a><a href="/werkstudent/">Werkstudent</a><a href="/analysen/">Analysen</a><a href="/hiring-signale/" class="cta-link">Hiring-Signale</a></nav></div></header>
 <main class="wrap">{crumb_html}{body}</main>
 <footer><div class="wrap"><p>Daten: öffentliche Karriereseiten von {n(STATS["companies"])} Unternehmen, Stand {fmt_date(STATS["date"])}. Wöchentlich aktualisiert. <a href="/methodik/">Methodik</a> · <a href="/impressum/">Impressum</a> · <a href="/datenschutz/">Datenschutz</a></p>
 <p>Alle Stellen verlinken direkt auf die Karriereseite des Unternehmens. Keine Gewähr für Vollständigkeit.</p></div></footer></body></html>"""
@@ -219,7 +276,8 @@ def job_table(jobs, show_company=True, limit=None):
     jobs = sorted(jobs, key=lambda j: j["postedAt"] or "", reverse=True)
     rows = []
     for j in jobs[:limit] if limit else jobs:
-        comp = f'<td><a href="/unternehmen/{j["company"]}/">{e(j["companyName"])}</a></td>' if show_company else ""
+        cname = f'<a href="/unternehmen/{j["company"]}/">{e(j["companyName"])}</a>' if j["company"] in PAGE_COS else e(j["companyName"])
+        comp = f'<td>{cname}</td>' if show_company else ""
         tags = []
         if j["remote"]:
             tags.append('<b class="t remote">Remote</b>')
@@ -247,6 +305,16 @@ def cta(context=""):
 # ---------------------------------------------------------------- pages
 SITEMAP = []
 STATS = {}
+USED_TITLES = set()
+IS_NEW = [lambda j: False]
+
+
+def new_note(js):
+    k = sum(1 for j in js if IS_NEW[0](j))
+    return f" Neu in den letzten 7 Tagen: <b>{n(k)}</b>." if k else ""
+PAGE_COS = set()  # companies that get their own page (enough jobs to not be thin)
+MIN_COMPANY_JOBS = 3
+MIN_COMBO_JOBS = 5
 
 
 def salary_summary(jobs):
@@ -259,68 +327,94 @@ def salary_summary(jobs):
     return len(eur), med(lo), med(hi)
 
 
-def build(jobs, snaps):
-    if DIST.exists():
-        shutil.rmtree(DIST)
+def build(jobs, snaps, data_date=None):
+    for _ in range(5):  # rmtree on thousands of dirs can race with macOS indexing; retry
+        if not DIST.exists():
+            break
+        shutil.rmtree(DIST, ignore_errors=True)
     DIST.mkdir()
     shutil.copy(ROOT / "static" / "style.css", DIST / "style.css")
     shutil.copy(ROOT / "static" / "favicon.svg", DIST / "favicon.svg")
     prev = snaps[-2][1] if len(snaps) >= 2 else None
+    if prev is not None and len(prev) < 0.5 * len(jobs):
+        prev = None  # previous snapshot came from the smaller tech-only crawl → no meaningful weekly deltas yet
     prev_by = lambda keyfn: Counter(k for j in prev for k in keyfn(j)) if prev else None  # noqa: E731
 
     tech = [j for j in jobs if j["cat"] in TECH]
     by_company = defaultdict(list)
     for j in jobs:
         by_company[j["company"]].append(j)
-    STATS.update(date=snaps[-1][0] if snaps else TODAY.isoformat(), companies=len(by_company), jobs=len(jobs), tech=len(tech))
+    PAGE_COS.clear()
+    PAGE_COS.update(c for c, js in by_company.items() if len(js) >= MIN_COMPANY_JOBS)
+    date = data_date or (snaps[-1][0] if snaps else TODAY.isoformat())
+    STATS.update(date=date, companies=len(by_company), jobs=len(jobs), tech=len(tech), month=month_label(date))
+    mon = STATS["month"]
     names = {c: js[0]["companyName"] for c, js in by_company.items()}
+    co_link = lambda k: f"/unternehmen/{k}/" if k in PAGE_COS else None  # noqa: E731
     tech_by_company = Counter(j["company"] for j in tech)
     prev_tech_company = prev_by(lambda j: [j["company"]] if j["cat"] in TECH else []) if prev else None
     prev_tech_total = sum(1 for j in prev if j["cat"] in TECH) if prev else None
+    city_count = Counter(c for j in jobs for c in j["cities"])
     city_tech = Counter(c for j in tech for c in j["cities"])
-    cat_count = Counter(j["cat"] for j in jobs)
+    cities_with_page = [c for c, v in city_count.most_common() if v >= MIN_COMBO_JOBS]
+    city_slug = {c: slugify(c) for c in city_count}
+    country_of = lambda c: CITY_COUNTRY.get(c) or CITIES.get(c, ("DE", ""))[0]  # noqa: E731
     ats_companies = defaultdict(set)
     for j in jobs:
         if j["ats"]:
             ats_companies[j["ats"]].add(j["company"])
-    week_ago = (TODAY - dt.timedelta(days=7)).isoformat()
-    new_week = [j for j in tech if (j["postedAt"] or "") >= week_ago]
-    city_slug = {c: slugify(c) for c in CITIES}
+    week_ago = (dt.date.fromisoformat(date) - dt.timedelta(days=7)).isoformat()
+    is_new = lambda j: (j.get("firstSeen") or j["postedAt"] or "") >= week_ago if prev is not None else (j["postedAt"] or "") >= week_ago  # noqa: E731
+    IS_NEW[0] = is_new
+    new_week = [j for j in jobs if is_new(j)]
+    sector_count = Counter(j["cat"] for j in jobs)
 
     # ---- home
     top_rows = "".join(
+        f'<tr><td>{i + 1}</td><td><a href="/unternehmen/{c}/">{e(names[c])}</a></td><td class="r">{n(len(by_company[c]))}</td><td class="r">{n(tech_by_company.get(c, 0))}</td></tr>'
+        for i, (c, _) in enumerate(Counter({c: len(js) for c, js in by_company.items()}).most_common(25)))
+    tech_rows = "".join(
         f'<tr><td>{i + 1}</td><td><a href="/unternehmen/{c}/">{e(names[c])}</a></td><td class="r">{n(v)}</td>'
         f'<td class="r">{delta(v, prev_tech_company.get(c, 0)) if prev_tech_company is not None else ""}</td></tr>'
-        for i, (c, v) in enumerate(tech_by_company.most_common(25)))
-    remote_share = 100 * sum(j["remote"] for j in tech) / max(len(tech), 1)
-    body = f"""<section class="hero"><h1>Wer stellt ein? Der DACH Tech Hiring Index</h1>
-<p class="lead">Jede Woche zählen wir die offenen Tech-Stellen von {n(len(by_company))} Unternehmen in Deutschland, Österreich und der Schweiz, direkt aus ihren Karriereseiten. Ohne Jobbörsen-Dubletten, ohne Personalvermittler.</p>
-{stat_tiles([(n(len(tech)) + " " + delta(len(tech), prev_tech_total), "offene Tech-Stellen"), (n(len(new_week)), "neu in den letzten 7 Tagen"), (n(sum(1 for v in tech_by_company.values() if v)), "Unternehmen mit Tech-Stellen"), (f"{remote_share:.0f} %", "Remote-Anteil")])}
-<p class="muted">Stand: {fmt_date(STATS["date"])}</p></section>
-<div class="grid2"><section><h2>Top 25: Wer sucht die meisten Tech-Leute?</h2>
-<table class="rank"><thead><tr><th>#</th><th>Unternehmen</th><th class="r">Tech-Stellen</th><th class="r">Δ Woche</th></tr></thead><tbody>{top_rows}</tbody></table>
-<p><a href="/unternehmen/">Alle Unternehmen →</a></p></section>
-<section><h2>Gefragteste Bereiche</h2>{bar_rows(Counter(j["cat"] for j in tech), len(tech), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}
-<h2>Tech-Stellen nach Stadt</h2>{bar_rows(city_tech, len(tech), str, lambda k: f"/staedte/{city_slug[k]}/", 10)}</section></div>
+        for i, (c, v) in enumerate(tech_by_company.most_common(15)))
+    trainee = sum(1 for j in jobs if j["track"])
+    body = f"""<section class="hero"><h1>Wer stellt ein? Offene Stellen in DACH, direkt von den Karriereseiten</h1>
+<p class="lead">Jede Woche lesen wir die Karriereseiten von {n(len(by_company))} Arbeitgebern in Deutschland, Österreich und der Schweiz aus: vom Tech-Startup über Kliniken und Handwerksbetriebe bis zum Konzern. Ohne Jobbörsen-Dubletten, ohne Personalvermittler, jede Stelle mit Link zur Originalausschreibung.</p>
+{stat_tiles([(n(len(jobs)), "offene Stellen"), (n(len(by_company)), "Arbeitgeber"), (n(len(tech)) + " " + delta(len(tech), prev_tech_total), "davon Tech-Stellen"), (n(trainee), "Ausbildung, Werkstudent, Praktikum")])}
+<p class="muted">Stand: {fmt_date(date)}</p></section>
+{latest_article_teaser()}
+<div class="grid2"><section><h2>Wer sucht gerade die meisten Leute?</h2>
+<table class="rank"><thead><tr><th>#</th><th>Arbeitgeber</th><th class="r">Stellen</th><th class="r">davon Tech</th></tr></thead><tbody>{top_rows}</tbody></table>
+<p><a href="/unternehmen/">Alle Arbeitgeber →</a></p></section>
+<section><h2>Stellen nach Bereich</h2>{bar_rows(sector_count, len(jobs), CAT_LABEL.get, lambda k: f"/jobs/{k}/", 14)}
+<h2>Stellen nach Stadt</h2>{bar_rows(city_count, len(jobs), str, lambda k: f"/staedte/{city_slug[k]}/" if k in cities_with_page else None, 10)}
+<p><a href="/ausbildung/">Ausbildungsplätze →</a> · <a href="/werkstudent/">Werkstudenten-Jobs &amp; Praktika →</a></p></section></div>
+<div class="grid2"><section><h2>Tech: wer sucht die meisten Tech-Leute?</h2>
+<table class="rank"><thead><tr><th>#</th><th>Unternehmen</th><th class="r">Tech-Stellen</th><th class="r">Δ Woche</th></tr></thead><tbody>{tech_rows}</tbody></table></section>
+<section><h2>Tech-Bereiche</h2>{bar_rows(Counter(j["cat"] for j in tech), len(tech), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}</section></div>
 <section><h2>Neu diese Woche</h2>{job_table(new_week, limit=30) if new_week else '<p class="muted">Noch keine Daten.</p>'}</section>
 {cta()}"""
-    page("/", f"Wer stellt ein? DACH Tech Hiring Index ({fmt_date(STATS['date'])})",
-         f"{n(len(tech))} offene Tech-Stellen bei {n(len(by_company))} Unternehmen in Deutschland, Österreich und der Schweiz. Wöchentlich aktualisiert, direkt aus den Karriereseiten.",
-         body, jsonld=[{"@context": "https://schema.org", "@type": "Dataset", "name": "DACH Tech Hiring Index",
-                        "description": "Wöchentliche Zählung offener Tech-Stellen von DACH-Unternehmen aus öffentlichen Karriereseiten.",
-                        "url": BASE + "/", "dateModified": STATS["date"], "creator": {"@type": "Organization", "name": CFG["brand"]}}])
+    page("/", fit_title(f"Wer stellt ein? {n(len(jobs))} offene Stellen in DACH ({mon})", f"Wer stellt ein? {n(len(jobs))} offene Stellen in DACH"),
+         f"{n(len(jobs))} offene Stellen von {n(len(by_company))} Arbeitgebern in Deutschland, Österreich und der Schweiz, direkt von den Karriereseiten. Wöchentlich aktualisiert.",
+         body, jsonld=[{"@context": "https://schema.org", "@type": "Dataset", "name": "Wer stellt ein? DACH-Stellenindex",
+                        "description": "Wöchentliche Zählung offener Stellen von Arbeitgebern in Deutschland, Österreich und der Schweiz aus öffentlichen Karriereseiten.",
+                        "url": BASE + "/", "dateModified": date, "spatialCoverage": "DACH", "isAccessibleForFree": True,
+                        "creator": {"@type": "Organization", "name": CFG["brand"]}}])
 
     # ---- companies
     rows = []
     for c, js in sorted(by_company.items(), key=lambda kv: -len(kv[1])):
         t = sum(1 for j in js if j["cat"] in TECH)
-        rows.append(f'<tr><td><a href="/unternehmen/{c}/">{e(names[c])}</a></td><td class="r">{n(len(js))}</td><td class="r">{n(t)}</td><td>{e(ATS_LABEL.get(js[0]["ats"], js[0]["ats"] or ""))}</td></tr>')
-        company_page(c, js, prev, city_slug)
-    page("/unternehmen/", "Welche Unternehmen stellen gerade ein? Alle Firmen im Index",
-         f"{n(len(by_company))} Unternehmen in DACH mit offenen Stellen, sortiert nach Anzahl. Wöchentlich aktualisiert.",
-         f'<h1>Unternehmen, die gerade einstellen</h1><p class="lead">{n(len(by_company))} Unternehmen mit offenen Stellen in DACH, Stand {fmt_date(STATS["date"])}.</p>'
-         f'<input class="filter" placeholder="Unternehmen filtern …" oninput="for(const r of document.querySelectorAll(\'tbody tr\'))r.hidden=!r.textContent.toLowerCase().includes(this.value.toLowerCase())">'
-         f'<div class="tw"><table class="rank"><thead><tr><th>Unternehmen</th><th class="r">Stellen DACH</th><th class="r">davon Tech</th><th>Bewerbermanagement</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>',
+        nm = f'<a href="/unternehmen/{c}/">{e(names[c])}</a>' if c in PAGE_COS else e(names[c])
+        rows.append(f'<tr><td>{nm}</td><td class="r">{n(len(js))}</td><td class="r">{n(t)}</td><td>{e(CAT_LABEL.get(Counter(j["cat"] for j in js).most_common(1)[0][0], ""))}</td></tr>')
+        if c in PAGE_COS:
+            company_page(c, js, prev, city_slug, cities_with_page)
+    page("/unternehmen/", fit_title(f"Welche Firmen stellen ein? {n(len(by_company))} Arbeitgeber in DACH"),
+         f"{n(len(by_company))} Arbeitgeber in Deutschland, Österreich und der Schweiz mit offenen Stellen, sortiert nach Anzahl. Wöchentlich aktualisiert.",
+         f'<h1>Arbeitgeber, die gerade einstellen</h1><p class="lead">{n(len(by_company))} Arbeitgeber mit offenen Stellen in DACH, Stand {fmt_date(date)}. '
+         f'Unternehmen mit mindestens {MIN_COMPANY_JOBS} Stellen haben eine eigene Seite mit Bereichen, Standorten und allen Ausschreibungen.</p>'
+         f'<input class="filter" placeholder="Arbeitgeber filtern …" oninput="for(const r of document.querySelectorAll(\'tbody tr\'))r.hidden=!r.textContent.toLowerCase().includes(this.value.toLowerCase())">'
+         f'<div class="tw"><table class="rank"><thead><tr><th>Arbeitgeber</th><th class="r">Stellen</th><th class="r">davon Tech</th><th>Größter Bereich</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>',
          crumbs=[("Unternehmen", None)])
 
     # ---- categories (+ category x city)
@@ -329,85 +423,141 @@ def build(jobs, snaps):
         js = [j for j in jobs if j["cat"] == slug]
         if not js:
             continue
-        cat_links.append(f'<li><a href="/jobs/{slug}/">{e(label)}</a> <span class="muted">{n(len(js))}</span></li>')
         ccity = Counter(c for j in js for c in j["cities"])
+        comp = Counter(j["company"] for j in js)
+        cat_links.append(f'<tr><td><a href="/jobs/{slug}/">{e(label)}</a></td><td class="r">{n(len(js))}</td><td class="r">{n(len(comp))}</td><td>{"Tech" if is_tech else ""}</td></tr>')
         sub = []
         for city, cnt in ccity.most_common():
-            if cnt < 3:
+            if cnt < MIN_COMBO_JOBS:
                 continue
             sub.append(f'<a class="chip" href="/jobs/{slug}/{city_slug[city]}/">{e(city)} ({cnt})</a>')
             cj = [j for j in js if city in j["cities"]]
             ccomp = Counter(j["company"] for j in cj)
-            page(f"/jobs/{slug}/{city_slug[city]}/", f"{label} Jobs in {city}: {n(cnt)} offene Stellen ({fmt_date(STATS['date'])})",
-                 f"{n(cnt)} offene Stellen im Bereich {label} in {city} bei {n(len(ccomp))} Unternehmen, direkt von den Karriereseiten. Wöchentlich aktualisiert.",
-                 f'<h1>{e(label)} in {e(city)}</h1><p class="lead">{n(cnt)} offene Stellen bei {n(len(ccomp))} Unternehmen, Stand {fmt_date(STATS["date"])}. '
-                 f'Am meisten sucht {e(names[ccomp.most_common(1)[0][0]])}.</p>'
-                 f'<h2>Unternehmen</h2>{bar_rows(ccomp, cnt, names.get, lambda k: f"/unternehmen/{k}/", 15)}<h2>Alle Stellen</h2>{job_table(cj)}{cta(label + "-Rollen in " + city)}',
+            share = 100 * cnt / max(city_count[city], 1)
+            page(f"/jobs/{slug}/{city_slug[city]}/",
+                 fit_title(f"{label} Jobs {city}: {n(cnt)} offene Stellen ({mon})", f"{label} Jobs {city}: {n(cnt)} offene Stellen", f"{label} Jobs {city}: {n(cnt)} Stellen"),
+                 f"{n(cnt)} offene Stellen im Bereich {label} in {city} bei {n(len(ccomp))} Arbeitgebern, direkt von den Karriereseiten. Stand {fmt_date(date)}.",
+                 f'<h1>{e(label)} in {e(city)}</h1><p class="lead">{n(cnt)} offene Stellen bei {n(len(ccomp))} Arbeitgebern, Stand {fmt_date(date)}. '
+                 f'Das sind {share:.0f} % aller {n(city_count[city])} Stellen in {e(city)}. Am meisten sucht {e(names[ccomp.most_common(1)[0][0]])} ({ccomp.most_common(1)[0][1]}).{new_note(cj)}</p>'
+                 f'<h2>Arbeitgeber</h2>{bar_rows(ccomp, cnt, names.get, co_link, 15)}<h2>Alle Stellen</h2>{job_table(cj)}{cta(label + "-Rollen in " + city)}',
                  crumbs=[("Bereiche", "/jobs/"), (label, f"/jobs/{slug}/"), (city, None)])
-        comp = Counter(j["company"] for j in js)
         sal = salary_summary(js)
         sal_html = f'<p>Gehaltsangaben: {n(sal[0])} Stellen nennen ein Gehalt, Median-Spanne <b>{n(sal[1])} – {n(sal[2])}</b> pro Jahr.</p>' if sal else ""
         lvl = Counter(j["level"] for j in js)
-        page(f"/jobs/{slug}/", f"{label} Jobs in DACH: {n(len(js))} offene Stellen ({fmt_date(STATS['date'])})",
-             f"Wer stellt im Bereich {label} ein? {n(len(js))} offene Stellen bei {n(len(comp))} Unternehmen in Deutschland, Österreich und der Schweiz.",
-             f'<h1>{e(label)}: wer stellt ein?</h1><p class="lead">{n(len(js))} offene Stellen bei {n(len(comp))} Unternehmen in DACH '
+        page(f"/jobs/{slug}/", fit_title(f"{label} Jobs in DACH: {n(len(js))} offene Stellen ({mon})", f"{label} Jobs: {n(len(js))} offene Stellen in DACH", f"{label} Jobs: {n(len(js))} Stellen"),
+             f"Wer stellt im Bereich {label} ein? {n(len(js))} offene Stellen bei {n(len(comp))} Arbeitgebern in Deutschland, Österreich und der Schweiz.",
+             f'<h1>{e(label)}: wer stellt ein?</h1><p class="lead">{n(len(js))} offene Stellen bei {n(len(comp))} Arbeitgebern in DACH '
              f'{delta(len(js), sum(1 for j in prev if j["cat"] == slug) if prev else None)}. '
-             f'Senior/Lead: {100 * lvl["senior"] / len(js):.0f} %, Junior/Einstieg: {100 * lvl["junior"] / len(js):.0f} %, Remote: {100 * sum(j["remote"] for j in js) / len(js):.0f} %.</p>{sal_html}'
-             f'<div class="chips">{"".join(sub)}</div><div class="grid2"><section><h2>Top-Unternehmen</h2>{bar_rows(comp, len(js), names.get, lambda k: f"/unternehmen/{k}/", 15)}</section>'
-             f'<section><h2>Städte</h2>{bar_rows(ccity, len(js), str, lambda k: f"/staedte/{city_slug[k]}/", 12)}</section></div>'
+             f'Senior/Leitung: {100 * lvl["senior"] / len(js):.0f} %, Junior/Einstieg/Ausbildung: {100 * lvl["junior"] / len(js):.0f} %, Remote: {100 * sum(j["remote"] for j in js) / len(js):.0f} %.{new_note(js)}</p>{sal_html}'
+             f'<div class="chips">{"".join(sub)}</div><div class="grid2"><section><h2>Top-Arbeitgeber</h2>{bar_rows(comp, len(js), names.get, co_link, 15)}</section>'
+             f'<section><h2>Städte</h2>{bar_rows(ccity, len(js), str, lambda k: f"/staedte/{city_slug[k]}/" if k in cities_with_page else None, 12)}</section></div>'
              f'<h2>Neueste Stellen</h2>{job_table(js, limit=100)}{cta(label + "-Rollen")}',
              crumbs=[("Bereiche", "/jobs/"), (label, None)])
-    page("/jobs/", "Tech-Jobs in DACH nach Bereich", "Offene Stellen nach Bereich: DevOps, Data & KI, Security, Backend, Frontend, Produkt, Design und mehr.",
-         f'<h1>Bereiche</h1><ul class="cols">{"".join(cat_links)}</ul>', crumbs=[("Bereiche", None)])
+    page("/jobs/", fit_title(f"Jobs nach Bereich: {n(len(jobs))} offene Stellen in DACH"),
+         "Offene Stellen nach Bereich: Gesundheit & Pflege, Handwerk, Handel, Logistik, Vertrieb, IT, Data & KI, Engineering und mehr.",
+         f'<h1>Offene Stellen nach Bereich</h1><p class="lead">{n(len(jobs))} offene Stellen bei {n(len(by_company))} Arbeitgebern in DACH, automatisch nach Stellentitel einem Bereich zugeordnet. '
+         f'Größter Bereich: {e(CAT_LABEL[sector_count.most_common(1)[0][0]])}. {n(len(tech))} Stellen ({100 * len(tech) / len(jobs):.0f} %) sind Tech-Stellen.</p>'
+         f'<div class="tw"><table class="rank"><thead><tr><th>Bereich</th><th class="r">Stellen</th><th class="r">Arbeitgeber</th><th></th></tr></thead><tbody>{"".join(cat_links)}</tbody></table></div>',
+         crumbs=[("Bereiche", None)])
 
     # ---- cities
     city_links = []
-    for city, (cc, _) in CITIES.items():
+    for city in cities_with_page:
         js = [j for j in jobs if city in j["cities"]]
-        if len(js) < 3:
-            continue
         t = [j for j in js if j["cat"] in TECH]
-        comp = Counter(j["company"] for j in t)
-        city_links.append(f'<li><a href="/staedte/{city_slug[city]}/">{e(city)}</a> <span class="muted">{n(len(t))} Tech / {n(len(js))} gesamt</span></li>')
-        page(f"/staedte/{city_slug[city]}/", f"Wer stellt in {city} ein? {n(len(t))} Tech-Stellen ({fmt_date(STATS['date'])})",
-             f"{n(len(js))} offene Stellen in {city}, davon {n(len(t))} Tech-Stellen, bei {n(len(set(j['company'] for j in js)))} Unternehmen. Wöchentlich aktualisiert.",
-             f'<h1>Wer stellt in {e(city)} ein?</h1><p class="lead">{n(len(js))} offene Stellen bei {n(len(set(j["company"] for j in js)))} Unternehmen, davon {n(len(t))} im Tech-Bereich ({COUNTRY_NAME[cc]}).</p>'
-             f'<div class="grid2"><section><h2>Unternehmen mit den meisten Tech-Stellen</h2>{bar_rows(comp, len(t), names.get, lambda k: f"/unternehmen/{k}/", 15)}</section>'
-             f'<section><h2>Bereiche</h2>{bar_rows(Counter(j["cat"] for j in js), len(js), CAT_LABEL.get, lambda k: f"/jobs/{k}/{city_slug[city]}/" if (DIST / "jobs" / k / city_slug[city]).exists() else None, 12)}</section></div>'
-             f'<h2>Neueste Tech-Stellen in {e(city)}</h2>{job_table(t, limit=100)}{cta("Tech-Rollen in " + city)}',
+        comp = Counter(j["company"] for j in js)
+        cc = country_of(city)
+        rank = cities_with_page.index(city) + 1
+        city_links.append(f'<tr><td><a href="/staedte/{city_slug[city]}/">{e(city)}</a></td><td>{COUNTRY_NAME[cc]}</td><td class="r">{n(len(js))}</td><td class="r">{n(len(t))}</td></tr>')
+        top_cat = Counter(j["cat"] for j in js).most_common(1)[0]
+        page(f"/staedte/{city_slug[city]}/", fit_title(f"Jobs in {city}: {n(len(js))} offene Stellen ({mon})", f"Jobs in {city}: {n(len(js))} offene Stellen", f"Jobs {city}: {n(len(js))} Stellen"),
+             f"Wer stellt in {city} ein? {n(len(js))} offene Stellen bei {n(len(comp))} Arbeitgebern, davon {n(len(t))} Tech-Stellen. Direkt von den Karriereseiten, wöchentlich aktualisiert.",
+             f'<h1>Wer stellt in {e(city)} ein?</h1><p class="lead">{n(len(js))} offene Stellen bei {n(len(comp))} Arbeitgebern ({COUNTRY_NAME[cc]}), Platz {rank} unter {len(cities_with_page)} Städten im Index. '
+             f'Größter Bereich: {e(CAT_LABEL[top_cat[0]])} ({n(top_cat[1])}). Tech-Stellen: {n(len(t))}. Am meisten sucht {e(names[comp.most_common(1)[0][0]])} ({comp.most_common(1)[0][1]}).{new_note(js)}</p>'
+             f'<div class="grid2"><section><h2>Arbeitgeber mit den meisten Stellen</h2>{bar_rows(comp, len(js), names.get, co_link, 15)}</section>'
+             f'<section><h2>Bereiche</h2>{bar_rows(Counter(j["cat"] for j in js), len(js), CAT_LABEL.get, lambda k: f"/jobs/{k}/{city_slug[city]}/" if (DIST / "jobs" / k / city_slug[city]).exists() else None, 14)}</section></div>'
+             f'<h2>Neueste Stellen in {e(city)}</h2>{job_table(js, limit=100)}{cta("Rollen in " + city)}',
              crumbs=[("Städte", "/staedte/"), (city, None)])
-    page("/staedte/", "Tech-Jobs nach Stadt: Berlin, München, Hamburg, Wien, Zürich …", "Offene Tech-Stellen nach Stadt in Deutschland, Österreich und der Schweiz.",
-         f'<h1>Städte</h1><ul class="cols">{"".join(city_links)}</ul>', crumbs=[("Städte", None)])
+    page("/staedte/", fit_title(f"Jobs nach Stadt: {len(cities_with_page)} Städte in DACH"), "Offene Stellen nach Stadt in Deutschland, Österreich und der Schweiz: Berlin, München, Hamburg, Wien, Zürich und mehr.",
+         f'<h1>Offene Stellen nach Stadt</h1><p class="lead">{len(cities_with_page)} Städte mit mindestens {MIN_COMBO_JOBS} offenen Stellen. Stellen ohne erkennbare Stadt (nur Region oder Remote) zählen nur in den Bereichen.</p>'
+         f'<div class="tw"><table class="rank"><thead><tr><th>Stadt</th><th>Land</th><th class="r">Stellen</th><th class="r">davon Tech</th></tr></thead><tbody>{"".join(city_links)}</tbody></table></div>',
+         crumbs=[("Städte", None)])
+
+    # ---- Ausbildung / Werkstudent hubs
+    for track, label, plural, intro in (
+        ("ausbildung", "Ausbildung", "Ausbildungsplätze", "Ausbildungsplätze und duale Studiengänge"),
+        ("werkstudent", "Werkstudent", "Werkstudenten-Jobs & Praktika", "Werkstudentenstellen, Praktika und Abschlussarbeiten"),
+    ):
+        tj = [j for j in jobs if j["track"] == track]
+        if not tj:
+            continue
+        tcity = Counter(c for j in tj for c in j["cities"])
+        tcomp = Counter(j["company"] for j in tj)
+        tcat = Counter(j["cat"] for j in tj)
+        chips = []
+        for city, cnt in tcity.most_common():
+            if cnt < MIN_COMBO_JOBS:
+                continue
+            chips.append(f'<a class="chip" href="/{track}/{city_slug[city]}/">{e(city)} ({cnt})</a>')
+            cj = [j for j in tj if city in j["cities"]]
+            ccomp = Counter(j["company"] for j in cj)
+            t_title = (f"Ausbildung {city}: {n(cnt)} freie Ausbildungsplätze", f"Ausbildung {city}: {n(cnt)} Plätze") if track == "ausbildung" else \
+                      (f"Werkstudent Jobs {city}: {n(cnt)} offene Stellen", f"Werkstudent {city}: {n(cnt)} Stellen")
+            page(f"/{track}/{city_slug[city]}/", fit_title(f"{t_title[0]} ({mon})", *t_title),
+                 f"{n(cnt)} {intro} in {city} bei {n(len(ccomp))} Arbeitgebern, direkt von den Karriereseiten. Stand {fmt_date(date)}, wöchentlich aktualisiert.",
+                 f'<h1>{e(plural)} in {e(city)}</h1><p class="lead">{n(cnt)} {e(intro)} bei {n(len(ccomp))} Arbeitgebern in {e(city)}, Stand {fmt_date(date)}. '
+                 f'Die meisten bietet {e(names[ccomp.most_common(1)[0][0]])} ({ccomp.most_common(1)[0][1]}).{new_note(cj)}</p>'
+                 f'<div class="grid2"><section><h2>Arbeitgeber</h2>{bar_rows(ccomp, cnt, names.get, co_link, 15)}</section>'
+                 f'<section><h2>Bereiche</h2>{bar_rows(Counter(j["cat"] for j in cj), cnt, CAT_LABEL.get, None, 10)}</section></div>'
+                 f'<h2>Alle Stellen</h2>{job_table(cj)}',
+                 crumbs=[(label, f"/{track}/"), (city, None)])
+        page(f"/{track}/", fit_title(f"{plural}: {n(len(tj))} offene Stellen in DACH ({mon})", f"{plural}: {n(len(tj))} offene Stellen", f"{label}: {n(len(tj))} offene Stellen"),
+             f"{n(len(tj))} {intro} bei {n(len(tcomp))} Arbeitgebern in Deutschland, Österreich und der Schweiz. Nach Stadt und Bereich, direkt von den Karriereseiten.",
+             f'<h1>{e(plural)} in DACH</h1><p class="lead">{n(len(tj))} {e(intro)} bei {n(len(tcomp))} Arbeitgebern, Stand {fmt_date(date)}. '
+             f'Häufigster Bereich: {e(CAT_LABEL[tcat.most_common(1)[0][0]])}. Städte mit den meisten Angeboten: {", ".join(e(c) for c, _ in tcity.most_common(3))}.</p>'
+             f'<div class="chips">{"".join(chips)}</div><div class="grid2"><section><h2>Arbeitgeber</h2>{bar_rows(tcomp, len(tj), names.get, co_link, 15)}</section>'
+             f'<section><h2>Bereiche</h2>{bar_rows(tcat, len(tj), CAT_LABEL.get, None, 12)}</section></div>'
+             f'<h2>Neueste Angebote</h2>{job_table(tj, limit=100)}',
+             crumbs=[(label, None)])
 
     # ---- ATS
     ats_links = []
     total_cos = len(by_company)
     for a, cos in sorted(ats_companies.items(), key=lambda kv: -len(kv[1])):
         lbl = ATS_LABEL.get(a, a)
-        ats_links.append(f'<li><a href="/ats/{a}/">{e(lbl)}</a> <span class="muted">{n(len(cos))} Unternehmen</span></li>')
-        lis = "".join(f'<li><a href="/unternehmen/{c}/">{e(names[c])}</a> <span class="muted">{n(len(by_company[c]))} Stellen</span></li>' for c in sorted(cos, key=lambda c: names[c].lower()))
-        page(f"/ats/{a}/", f"Welche Unternehmen nutzen {lbl}? {n(len(cos))} Firmen in DACH",
-             f"{n(len(cos))} Unternehmen in Deutschland, Österreich und der Schweiz nutzen {lbl} als Bewerbermanagementsystem (ATS). Liste mit offenen Stellen.",
-             f'<h1>Unternehmen, die {e(lbl)} nutzen</h1><p class="lead">{n(len(cos))} von {n(total_cos)} Unternehmen im Index ({100 * len(cos) / total_cos:.0f} %) veröffentlichen ihre Stellen über {e(lbl)}.</p><ul class="cols">{lis}</ul>'
+        ats_links.append(f'<li><a href="/ats/{a}/">{e(lbl)}</a> <span class="muted">{n(len(cos))} Arbeitgeber</span></li>')
+        ats_jobs = sum(len(by_company[c]) for c in cos)
+        lis = "".join(f'<li>{"<a href=" + chr(34) + "/unternehmen/" + c + "/" + chr(34) + ">" + e(names[c]) + "</a>" if c in PAGE_COS else e(names[c])} <span class="muted">{n(len(by_company[c]))} Stellen</span></li>' for c in sorted(cos, key=lambda c: names[c].lower()))
+        page(f"/ats/{a}/", fit_title(f"Wer nutzt {lbl}? {n(len(cos))} Arbeitgeber in DACH", f"{lbl}: {n(len(cos))} Arbeitgeber in DACH"),
+             f"{n(len(cos))} Arbeitgeber in Deutschland, Österreich und der Schweiz nutzen {lbl} als Bewerbermanagementsystem (ATS). Liste mit offenen Stellen.",
+             f'<h1>Arbeitgeber, die {e(lbl)} nutzen</h1><p class="lead">{n(len(cos))} von {n(total_cos)} Arbeitgebern im Index ({100 * len(cos) / total_cos:.0f} %) veröffentlichen ihre Stellen über {e(lbl)}, zusammen {n(ats_jobs)} offene Stellen '
+             f'(im Schnitt {ats_jobs / len(cos):.0f} pro Arbeitgeber). Die Liste zeigt alle Arbeitgeber mit aktuell offenen Stellen.</p><ul class="cols">{lis}</ul>'
              f'<p class="muted">Für Entwickler: <a href="https://github.com/goldfoot/career-site-jobs-api">So liest man {e(lbl)}-Stellen per API aus</a>.</p>',
              crumbs=[("ATS", "/ats/"), (lbl, None)])
-    page("/ats/", "Bewerbermanagementsysteme (ATS) im DACH-Tech-Markt: Marktanteile",
-         "Welche ATS nutzen Tech-Unternehmen in DACH? Personio, Greenhouse, Lever, Ashby, SmartRecruiters und mehr, gezählt aus Karriereseiten.",
-         f'<h1>Welches ATS nutzen DACH-Tech-Unternehmen?</h1><p class="lead">Gezählt über {n(total_cos)} Unternehmen mit offenen Stellen.</p>'
+    page("/ats/", fit_title("Bewerbermanagementsysteme (ATS) in DACH: Marktanteile"),
+         "Welche ATS nutzen Arbeitgeber in DACH? softgarden, Personio, SmartRecruiters, Greenhouse und mehr, gezählt aus Karriereseiten.",
+         f'<h1>Welches Bewerbermanagementsystem nutzen Arbeitgeber in DACH?</h1><p class="lead">Gezählt über {n(total_cos)} Arbeitgeber mit offenen Stellen, Stand {fmt_date(date)}. '
+         f'Workday, SAP SuccessFactors und andere Systeme ohne offenen Stellen-Feed sind nicht enthalten, deshalb fehlen viele Großkonzerne.</p>'
          f'{bar_rows(Counter({a: len(c) for a, c in ats_companies.items()}), total_cos, lambda a: ATS_LABEL.get(a, a), lambda a: f"/ats/{a}/", 20)}<ul class="cols">{"".join(ats_links)}</ul>',
          crumbs=[("ATS", None)])
 
+    analysen_pages()
     static_pages()
+    (DIST / "404.html").write_text((DIST / "index.html").read_text().replace("<title>", "<title>Seite nicht gefunden · ", 1)
+                                   .replace('<main class="wrap">', '<main class="wrap"><h1>Diese Seite gibt es nicht (mehr)</h1><p class="lead">Vielleicht ist die Stelle besetzt oder das Unternehmen sucht gerade niemanden. Hier die aktuelle Übersicht:</p>', 1)
+                                   .replace('<link rel="canonical"', '<meta name="robots" content="noindex"><link rel="canonical"', 1))
+    if CFG.get("indexNowKey"):
+        (DIST / f'{CFG["indexNowKey"]}.txt').write_text(CFG["indexNowKey"])
     (DIST / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-                                      + "".join(f"<url><loc>{u}</loc><lastmod>{STATS['date']}</lastmod></url>" for u in SITEMAP) + "</urlset>\n")
+                                      + "".join(f"<url><loc>{u}</loc><lastmod>{date}</lastmod></url>" for u in SITEMAP) + "</urlset>\n")
     (DIST / "robots.txt").write_text(("User-agent: *\nDisallow: /\n" if CFG.get("noindex") else "User-agent: *\nAllow: /\n") + f"Sitemap: {BASE}/sitemap.xml\n")
     if CFG.get("cname"):
         (DIST / "CNAME").write_text(CFG["cname"] + "\n")
     (DIST / ".nojekyll").write_text("")
-    print(f"built {len(SITEMAP)} pages · {n(len(jobs))} jobs · {n(len(tech))} tech · {len(by_company)} companies")
+    print(f"built {len(SITEMAP)} pages · {n(len(jobs))} jobs · {n(len(tech))} tech · {len(by_company)} companies ({len(PAGE_COS)} with page)")
 
 
-def company_page(c, js, prev, city_slug):
+def company_page(c, js, prev, city_slug, cities_with_page=()):
     name = js[0]["companyName"]
     t = [j for j in js if j["cat"] in TECH]
     cats = Counter(j["cat"] for j in js)
@@ -417,34 +567,129 @@ def company_page(c, js, prev, city_slug):
     newest = max((j["postedAt"] for j in js if j["postedAt"]), default=None)
     prev_n = sum(1 for j in prev if j["company"] == c) if prev else None
     sal = salary_summary(js)
-    facts = [f"{e(name)} hat aktuell <b>{n(len(js))} offene Stellen</b> in DACH {delta(len(js), prev_n)}, davon {n(len(t))} im Tech-Bereich."]
+    city_link = lambda k: f'<a href="/staedte/{city_slug[k]}/">{e(k)}</a>' if k in cities_with_page else e(k)  # noqa: E731
+    facts = [f"{e(name)} hat aktuell <b>{n(len(js))} offene Stellen</b> in DACH {delta(len(js), prev_n)}" + (f", davon {n(len(t))} im Tech-Bereich." if t else ".")]
+    trainee = sum(1 for j in js if j.get("track"))
     if cats:
         top = ", ".join(f"{e(CAT_LABEL[k])} ({v})" for k, v in cats.most_common(3))
         facts.append(f"Die meisten Stellen entfallen auf {top}.")
     if cities:
-        facts.append("Standorte: " + ", ".join(f'<a href="/staedte/{city_slug[k]}/">{e(k)}</a> ({v})' for k, v in cities.most_common(5)) + ".")
+        facts.append("Standorte: " + ", ".join(f"{city_link(k)} ({v})" for k, v in cities.most_common(5)) + ".")
+    if trainee:
+        facts.append(f"Ausbildung, Werkstudent oder Praktikum: {n(trainee)} Angebote.")
     facts.append(f"Remote ausgeschrieben: {n(remote)} Stellen ({100 * remote / len(js):.0f} %).")
     if sal:
         facts.append(f"{n(sal[0])} Stellen nennen ein Gehalt (Median-Spanne {n(sal[1])} – {n(sal[2])} pro Jahr).")
+    if new_note(js):
+        facts.append(new_note(js).strip())
     facts.append(f'Bewerbermanagement: <a href="/ats/{js[0]["ats"]}/">{e(ats)}</a>. Neueste Ausschreibung: {fmt_date(newest)}.')
-    page(f"/unternehmen/{c}/", f"Stellt {name} ein? {n(len(js))} offene Stellen ({fmt_date(STATS['date'])})",
-         f"{name} hat {n(len(js))} offene Stellen in Deutschland, Österreich und der Schweiz, davon {n(len(t))} Tech-Stellen. Bereiche, Standorte, Remote-Anteil. Wöchentlich aktualisiert.",
+    mon = STATS["month"]
+    top_city = cities.most_common(1)[0][0] if cities else None
+    # Long names: keep start and end (branches of one organisation often differ only at the end).
+    title = None
+    for tn in ([name] if len(name) <= 40 else [f"{name[:22].rstrip()}…{name[-16:].lstrip()}", f"{name[:40].rstrip()}…"]):
+        title = fit_title(f"{tn} Jobs: {n(len(js))} offene Stellen ({mon})", f"{tn} Jobs: {n(len(js))} offene Stellen", f"{tn} Jobs: {n(len(js))} Stellen")
+        if title not in USED_TITLES:
+            break
+    USED_TITLES.add(title)
+    page(f"/unternehmen/{c}/", title,
+         f"Stellt {name} ein? {n(len(js))} offene Stellen" + (f", vor allem in {top_city}" if top_city else "") + f": {', '.join(CAT_LABEL[k] for k, _ in cats.most_common(2))}. Direkt von der Karriereseite, wöchentlich aktualisiert.",
          f'<h1>Stellt {e(name)} ein?</h1><p class="lead">{" ".join(facts)}</p>'
          f'<div class="grid2"><section><h2>Bereiche</h2>{bar_rows(cats, len(js), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}</section>'
-         f'<section><h2>Standorte</h2>{bar_rows(cities, len(js), str, lambda k: f"/staedte/{city_slug[k]}/", 8) if cities else "<p class=muted>Nur Remote.</p>"}</section></div>'
+         f'<section><h2>Standorte</h2>{bar_rows(cities, len(js), str, lambda k: f"/staedte/{city_slug[k]}/" if k in cities_with_page else None, 8) if cities else "<p class=muted>Keine Stadt angegeben.</p>"}</section></div>'
          f'<h2>Alle offenen Stellen bei {e(name)}</h2>{job_table(js, show_company=False)}{cta()}',
          crumbs=[("Unternehmen", "/unternehmen/"), (name, None)],
          jsonld=[{"@context": "https://schema.org", "@type": "Organization", "name": name, **({"url": "https://" + js[0]["domain"]} if js[0].get("domain") and "." in js[0]["domain"] and "/" not in js[0]["domain"] and ":" not in js[0]["domain"] else {})}])
 
 
+def md_to_html(md):
+    """Minimal Markdown for AI-written articles: ## headings, paragraphs, - lists, **bold**, *italic*, [text](/internal/ or https://) links. Everything else escaped."""
+    def inline(t):
+        t = e(t, quote=False)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+        t = re.sub(r"(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?![*\w])", r"<i>\1</i>", t)
+        return re.sub(r"\[([^\]]+)\]\(((?:/|https://)[^)\s\"]*)\)", r'<a href="\2">\1</a>', t)
+    out, para, items = [], [], []
+    def flush():
+        if para:
+            out.append(f"<p>{inline(' '.join(para))}</p>"); para.clear()
+        if items:
+            out.append("<ul>" + "".join(f"<li>{inline(i)}</li>" for i in items) + "</ul>"); items.clear()
+    for line in md.splitlines():
+        s_ = line.strip()
+        if not s_:
+            flush()
+        elif s_.startswith("#"):
+            flush(); lvl = min(max(len(s_) - len(s_.lstrip("#")), 2), 3)
+            out.append(f"<h{lvl}>{inline(s_.lstrip('#').strip())}</h{lvl}>")
+        elif re.match(r"[-*] ", s_):
+            if para:
+                flush()
+            items.append(s_[2:])
+        else:
+            if items:
+                flush()
+            para.append(s_)
+    flush()
+    return "\n".join(out)
+
+
+def latest_article_teaser():
+    files = sorted((ROOT / "content" / "analysen").glob("*.json"))
+    if not files:
+        return ""
+    a = json.loads(files[-1].read_text())
+    y, w = a["week"].split("-W")
+    return (f'<section class="teaser"><p class="muted">Analyse der Woche</p><h2><a href="/analysen/kw-{int(w)}-{y}/">{e(a["title"])}</a></h2>'
+            f'<p>{e(a["description"])} <a href="/analysen/">Alle Analysen →</a></p></section>')
+
+
+def analysen_pages():
+    """Weekly AI-written market analyses from content/analysen/*.json (see write_article.py)."""
+    arts = sorted((json.loads(p.read_text()) for p in (ROOT / "content" / "analysen").glob("*.json")), key=lambda a: a["week"], reverse=True)
+    disclosure = ('<p class="muted ai-note">Dieser Text wurde automatisch mit KI (Claude) aus den Indexdaten der Woche erstellt. '
+                  'Alle Zahlen werden vor der Veröffentlichung maschinell gegen die Daten geprüft. <a href="/methodik/">Methodik</a></p>')
+    for i, a in enumerate(arts):
+        y, w = a["week"].split("-W")
+        slug = f"/analysen/kw-{int(w)}-{y}/"
+        nav = []
+        if i + 1 < len(arts):
+            o = arts[i + 1]; ow = o["week"].split("-W")
+            nav.append(f'<a href="/analysen/kw-{int(ow[1])}-{ow[0]}/">← KW {int(ow[1])}</a>')
+        if i > 0:
+            o = arts[i - 1]; ow = o["week"].split("-W")
+            nav.append(f'<a href="/analysen/kw-{int(ow[1])}-{ow[0]}/">KW {int(ow[1])} →</a>')
+        body = (f'<article class="prose"><p class="muted">Arbeitsmarkt-Analyse KW {int(w)}/{y} · Datenstand {fmt_date(a["dataDate"])}</p>'
+                f'<h1>{e(a["title"])}</h1>{md_to_html(a["body"])}{disclosure}'
+                f'<p class="pager">{" · ".join(nav)}</p></article>{cta()}')
+        page(slug, a["title"], a["description"], body, crumbs=[("Analysen", "/analysen/"), (f"KW {int(w)}/{y}", None)],
+             jsonld=[{"@context": "https://schema.org", "@type": "Article", "headline": a["title"], "description": a["description"],
+                      "datePublished": a["dataDate"], "dateModified": a["dataDate"], "inLanguage": "de",
+                      "author": {"@type": "Organization", "name": CFG["brand"]}, "publisher": {"@type": "Organization", "name": CFG["brand"]},
+                      "mainEntityOfPage": BASE + slug}])
+    lis = "".join(f'<li><a href="/analysen/kw-{int(a["week"].split("-W")[1])}-{a["week"][:4]}/">{e(a["title"])}</a><br><span class="muted">{e(a["description"])}</span></li>' for a in arts)
+    page("/analysen/", fit_title("Arbeitsmarkt-Analysen DACH: wöchentlich aus Karriereseiten"),
+         "Jede Woche eine Analyse des DACH-Stellenmarkts: welche Bereiche, Städte und Arbeitgeber gerade einstellen, wie viele Gehalt und Remote anbieten.",
+         f'<h1>Arbeitsmarkt-Analysen</h1><p class="lead">Jeden Montag werten wir die offenen Stellen von {n(STATS["companies"])} Arbeitgebern in Deutschland, Österreich und der Schweiz aus: '
+         f'Welche Bereiche wachsen, welche Städte und Arbeitgeber suchen am meisten, wie viele Stellen nennen ein Gehalt oder sind remote. Die Texte werden automatisch mit KI aus den Daten erstellt; jede Zahl wird gegen den Index geprüft.</p>'
+         + (f'<ul class="articles">{lis}</ul>' if arts else '<p class="muted">Die erste Analyse erscheint am Montag.</p>'),
+         crumbs=[("Analysen", None)])
+    LATEST_ARTICLE[0] = arts[0] if arts else None
+
+
+LATEST_ARTICLE = [None]
+
+
 def static_pages():
     md = lambda s: s  # noqa: E731  (content is trusted, authored here)
-    page("/methodik/", "Methodik: so entsteht der DACH Tech Hiring Index", "Datenquellen, Zählweise und Grenzen des DACH Tech Hiring Index.", md(f"""
+    page("/methodik/", "Methodik: so entsteht der Stellenindex", "Datenquellen, Zählweise und Grenzen des wöchentlichen DACH-Stellenindex von wer-stellt-ein.de.", md(f"""
 <h1>Methodik</h1>
-<p>Der Index liest einmal pro Woche die <b>öffentlichen Stellen-Feeds</b> der Karriereseiten von über {n(STATS["companies"])} Unternehmen aus (Greenhouse, Lever, Ashby, Personio, SmartRecruiters, Workable, Recruitee, Teamtailor, Rippling, Breezy HR). Das sind dieselben Daten, die die Unternehmen selbst auf ihrer Website anzeigen.</p>
+<p>Der Index liest einmal pro Woche die <b>öffentlichen Stellen-Feeds</b> der Karriereseiten von {n(STATS["companies"])} Arbeitgebern aus (softgarden, Personio, SmartRecruiters, Recruitee, Greenhouse, Ashby, Teamtailor, Lever). Das sind dieselben Daten, die die Arbeitgeber selbst auf ihrer Website anzeigen. Gruppen-Karriereportale, die dieselbe Stelle mehrfach veröffentlichen, werden zusammengeführt.</p>
 <ul><li><b>Nur DACH:</b> gezählt werden Stellen mit Standort in Deutschland, Österreich oder der Schweiz sowie Remote-Stellen, die DACH oder Europa einschließen.</li>
 <li><b>Bereiche</b> werden automatisch anhand des Stellentitels zugeordnet (z. B. „Site Reliability Engineer“ → DevOps, SRE &amp; Platform). Einzelne Zuordnungen können falsch sein.</li>
 <li><b>Tech-Stellen</b> = Engineering, DevOps, Data/KI, Security, Mobile, QA, Produkt, Design, IT, Hardware/Embedded.</li>
+<li><b>Ausbildung</b> und <b>Werkstudent/Praktikum</b> werden ebenfalls am Stellentitel erkannt.</li>
+<li>Eigene Seiten gibt es für Arbeitgeber ab {MIN_COMPANY_JOBS} Stellen sowie für Städte und Kombinationen ab {MIN_COMBO_JOBS} Stellen.</li>
 <li><b>Δ Woche</b> vergleicht mit dem Stand der Vorwoche.</li>
 <li>Unternehmen, deren Karriereseite über Workday, SuccessFactors o. ä. läuft, sind (noch) nicht enthalten.</li></ul>
 <p>Es werden keine Bewerberdaten oder personenbezogenen Daten erhoben. Jede Stelle verlinkt auf die Originalausschreibung.</p>
@@ -477,9 +722,13 @@ def relativize():
 
 
 if __name__ == "__main__":
-    jobs = load_jobs()
+    data_date = None
+    if (DATA / "index-latest.json").exists() and "--legacy" not in sys.argv:
+        jobs, data_date = load_index_jobs()
+    else:
+        jobs = load_jobs()
     if "--snapshot" in sys.argv:
-        write_snapshot(jobs, TODAY.isoformat())
-    build(jobs, load_snapshots())
+        write_snapshot(jobs, data_date or TODAY.isoformat())
+    build(jobs, load_snapshots(), data_date)
     if "--relative" in sys.argv:
         relativize()

@@ -3,7 +3,7 @@
 set -e
 S=$(mktemp -d)
 git clone -q git@github.com:goldfoot/wer-stellt-ein.git "$S/repo"
-rsync -a --delete --filter='P data/snapshots/***' --exclude .git --exclude dist --exclude data/jobs-latest.json --exclude __pycache__ ./ "$S/repo/"
+rsync -a --delete --filter='P data/snapshots/***' --filter='P data/weekly/***' --filter='P content/analysen/***' --exclude .git --exclude dist --exclude data/jobs-latest.json --exclude __pycache__ ./ "$S/repo/"
 cd "$S/repo"
 git add -A
 if git diff --cached --quiet; then echo "no changes"; else

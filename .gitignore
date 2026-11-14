@@ -1,3 +1,4 @@
 dist/
 data/jobs-latest.json
 __pycache__/
+data/index-latest.json

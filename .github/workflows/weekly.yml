@@ -1,7 +1,7 @@
 name: weekly-build
 on:
   schedule:
-    - cron: "0 7 * * 1"   # Mondays 07:00 UTC, after the Apify task (Mondays 05:00 Europe/Berlin)
+    - cron: "0 7 * * 1"   # Mondays 07:00 UTC, after the DACH index refresh (Mondays 06:00 Europe/Berlin, ~30 min)
   workflow_dispatch: {}
 permissions:
   contents: write
@@ -15,17 +15,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Fetch latest jobs from Apify
-        env: { APIFY_TOKEN: "${{ secrets.APIFY_TOKEN }}" }
-        run: python3 fetch.py
+      - name: Fetch the DACH Jobs API index (public, no token)
+        run: python3 fetch.py --index
+      - name: Weekly facts (input for the AI analysis)
+        run: python3 weekly_facts.py
+      - name: AI weekly analysis (skipped without ANTHROPIC_API_KEY; fact-checked, not published if the check fails)
+        continue-on-error: true
+        env: { ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}" }
+        run: |
+          pip install -q anthropic
+          python3 write_article.py
       - name: Build site (+ weekly snapshot)
         run: python3 build.py --snapshot
       - name: Commit snapshot
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/snapshots
-          git commit -m "Weekly snapshot $(date -u +%F)" || echo "no changes"
+          git add data/snapshots data/weekly content/analysen
+          git commit -m "Weekly snapshot + analysis $(date -u +%F)" || echo "no changes"
           git push
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
@@ -38,3 +45,7 @@ jobs:
     steps:
       - id: d
         uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+      - name: Ping IndexNow (Bing, Yandex, Seznam, Naver)
+        continue-on-error: true
+        run: python3 indexnow.py

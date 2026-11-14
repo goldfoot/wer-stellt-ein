@@ -3,7 +3,7 @@
 
 Token: env APIFY_TOKEN (GitHub Actions secret) or, locally, the Apify CLI login (`apify auth token`).
 Never prints the token.
-Usage: python3 fetch.py [--run-id RUN_ID] [--resolve-boards]
+Usage: python3 fetch.py --index  |  python3 fetch.py [--run-id RUN_ID] [--resolve-boards]
   --resolve-boards  also rewrite data/boards.txt (resolved ats:slug per company → faster weekly runs)
 """
 import json
@@ -31,7 +31,22 @@ def get(path, tok):
         return json.loads(r.read())
 
 
+INDEX_URL = "https://api.apify.com/v2/key-value-stores/NJVRVFPYSeAhg5qDC/records/INDEX"  # public-by-ID, written by dach-jobs-index-refresher
+
+
+def fetch_index():
+    """All-sector DACH index (no token needed) → data/index-latest.json."""
+    import gzip
+    with urllib.request.urlopen(INDEX_URL, timeout=120) as r:
+        idx = json.loads(gzip.decompress(r.read()))
+    (ROOT / "data").mkdir(exist_ok=True)
+    (ROOT / "data" / "index-latest.json").write_text(json.dumps(idx, ensure_ascii=False))
+    print(f"index {idx['updatedAt']}: {len(idx['jobs'])} jobs")
+
+
 def main():
+    if "--index" in sys.argv:
+        return fetch_index()
     tok = token()
     if "--run-id" in sys.argv:  # comma-separated list → merged
         runs = [get(f"/v2/actor-runs/{r}", tok)["data"] for r in sys.argv[sys.argv.index('--run-id') + 1].split(",")]
