@@ -1,0 +1,11 @@
+{
+  "brand": "Wer stellt ein?",
+  "baseUrl": "https://wer-stellt-ein.de",
+  "cname": "",
+  "noindex": true,
+  "actorUrl": "https://apify.com/goldfoot/ats-jobs-feed",
+  "contactHref": "mailto:OWNER_EMAIL_TODO",
+  "leadOfferText": "Sie nennen uns Ihre Zielrollen und Regionen, wir schicken Ihnen eine kostenlose Beispiel-Liste. Danach ab 49 € pro Monat, monatlich kündbar.",
+  "impressumHtml": "<h1>Impressum</h1><p><b>TODO (Inhaber):</b> Name, ladungsfähige Anschrift, E-Mail, ggf. USt-IdNr. gemäß § 5 DDG. Die Seite bleibt auf <code>noindex</code>, bis dieser Abschnitt ausgefüllt ist.</p>",
+  "privacyHtml": "<h1>Datenschutzerklärung</h1><p><b>Verantwortlicher:</b> siehe <a href=\"/impressum/\">Impressum</a>.</p><h2>Hosting</h2><p>Diese Website ist eine statische Website. Beim Aufruf verarbeitet der Hosting-Anbieter technisch notwendige Daten (IP-Adresse, Zeitpunkt, aufgerufene Seite, User-Agent) in Server-Logs, um die Seite auszuliefern und vor Missbrauch zu schützen (Art. 6 Abs. 1 lit. f DSGVO). </p><h2>Keine Cookies, kein Tracking</h2><p>Wir setzen keine Cookies, keine Analyse- oder Marketing-Tools und binden keine externen Schriftarten oder Skripte ein.</p><h2>Stellenanzeigen</h2><p>Die angezeigten Stellen stammen aus öffentlich zugänglichen Karriereseiten von Unternehmen. Es werden keine personenbezogenen Daten von Bewerbern oder Ansprechpartnern verarbeitet. Links führen auf die Websites der jeweiligen Unternehmen; dort gelten deren Datenschutzbestimmungen.</p><h2>Kontakt per E-Mail</h2><p>Wenn Sie uns per E-Mail kontaktieren, verarbeiten wir Ihre Angaben zur Bearbeitung der Anfrage (Art. 6 Abs. 1 lit. b bzw. f DSGVO) und löschen sie, sobald sie nicht mehr erforderlich sind.</p><h2>Ihre Rechte</h2><p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Widerspruch und Datenübertragbarkeit sowie das Recht auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde.</p>"
+}

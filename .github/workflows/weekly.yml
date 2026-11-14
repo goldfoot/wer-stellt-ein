@@ -1,0 +1,40 @@
+name: weekly-build
+on:
+  schedule:
+    - cron: "0 7 * * 1"   # Mondays 07:00 UTC, after the Apify task (Mondays 05:00 Europe/Berlin)
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency: { group: pages, cancel-in-progress: false }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Fetch latest jobs from Apify
+        env: { APIFY_TOKEN: "${{ secrets.APIFY_TOKEN }}" }
+        run: python3 fetch.py
+      - name: Build site (+ weekly snapshot)
+        run: python3 build.py --snapshot
+      - name: Commit snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/snapshots
+          git commit -m "Weekly snapshot $(date -u +%F)" || echo "no changes"
+          git push
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+  deploy:
+    # Publishing stays off until the Impressum is filled in: set repo variable DEPLOY=true (Settings → Variables).
+    if: vars.DEPLOY == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
