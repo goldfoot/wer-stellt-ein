@@ -1,0 +1,714 @@
+{
+ "week": "2026-W47",
+ "dataDate": "2026-11-16",
+ "source": "wer-stellt-ein.de / DACH Jobs API index (public career sites)",
+ "notes": "medianAnnualSalaryEUR: median midpoint of published EUR ranges (monthly x12), excluding Ausbildung/Werkstudent/Praktikum; only where >= 20 postings publish one. Pay may include part-time roles. Index covers employers using supported ATS, not the whole market.",
+ "totals": {
+  "jobs": 45562,
+  "employers": 4450,
+  "techJobs": 5412,
+  "techPct": 11.9,
+  "postedLast7Days": 9427,
+  "firstSeenLast7Days": null,
+  "remotePct": 2.4,
+  "hybridPct": 3.0,
+  "salaryPct": 9.9,
+  "aiTitleJobs": 476,
+  "ausbildung": 5041,
+  "werkstudentPraktikum": 2466
+ },
+ "countries": {
+  "Deutschland": 43418,
+  "Österreich": 1247,
+  "Schweiz": 867
+ },
+ "categories": [
+  {
+   "category": "Operations & Sonstiges",
+   "slug": "operations",
+   "jobs": 14522,
+   "medianAnnualSalaryEUR": 50000.0,
+   "salarySampleSize": 485,
+   "remotePct": 2.5,
+   "salaryPct": 9.4,
+   "seniorPct": 7.3
+  },
+  {
+   "category": "Gesundheit & Pflege",
+   "slug": "healthcare",
+   "jobs": 7744,
+   "medianAnnualSalaryEUR": 48800.0,
+   "salarySampleSize": 965,
+   "remotePct": 0.2,
+   "salaryPct": 15.6,
+   "seniorPct": 4.3
+  },
+  {
+   "category": "Handwerk & Technik",
+   "slug": "trades",
+   "jobs": 4853,
+   "medianAnnualSalaryEUR": 43800.0,
+   "salarySampleSize": 187,
+   "remotePct": 0.5,
+   "salaryPct": 9.7,
+   "seniorPct": 0.2
+  },
+  {
+   "category": "Handel & Verkauf",
+   "slug": "retail",
+   "jobs": 2978,
+   "medianAnnualSalaryEUR": 36000.0,
+   "salarySampleSize": 44,
+   "remotePct": 0.2,
+   "salaryPct": 9.7,
+   "seniorPct": 0.7
+  },
+  {
+   "category": "Sales & Business Development",
+   "slug": "sales",
+   "jobs": 1987,
+   "medianAnnualSalaryEUR": 60000.0,
+   "salarySampleSize": 81,
+   "remotePct": 10.4,
+   "salaryPct": 5.1,
+   "seniorPct": 11.8
+  },
+  {
+   "category": "Logistik, Lager & Fahrer",
+   "slug": "logistics",
+   "jobs": 1820,
+   "medianAnnualSalaryEUR": 40000.0,
+   "salarySampleSize": 60,
+   "remotePct": 0.4,
+   "salaryPct": 10.2,
+   "seniorPct": 1.1
+  },
+  {
+   "category": "Ingenieurwesen & sonstige Technik",
+   "slug": "engineering-other",
+   "jobs": 1791,
+   "medianAnnualSalaryEUR": 57500.0,
+   "salarySampleSize": 94,
+   "remotePct": 3.0,
+   "salaryPct": 8.4,
+   "seniorPct": 8.5
+  },
+  {
+   "category": "Finanzen & Recht",
+   "slug": "finance-legal",
+   "jobs": 1777,
+   "medianAnnualSalaryEUR": 72500.0,
+   "salarySampleSize": 118,
+   "remotePct": 3.2,
+   "salaryPct": 7.6,
+   "seniorPct": 13.2
+  },
+  {
+   "category": "Gastronomie & Hotellerie",
+   "slug": "hospitality",
+   "jobs": 1155,
+   "medianAnnualSalaryEUR": 31000.0,
+   "salarySampleSize": 64,
+   "remotePct": 0.2,
+   "salaryPct": 9.6,
+   "seniorPct": 2.7
+  },
+  {
+   "category": "Bildung & Soziales",
+   "slug": "education-social",
+   "jobs": 978,
+   "medianAnnualSalaryEUR": 49600.0,
+   "salarySampleSize": 178,
+   "remotePct": 0.9,
+   "salaryPct": 23.1,
+   "seniorPct": 2.8
+  },
+  {
+   "category": "Customer Success & Support",
+   "slug": "customer",
+   "jobs": 971,
+   "medianAnnualSalaryEUR": 47500.0,
+   "salarySampleSize": 31,
+   "remotePct": 3.7,
+   "salaryPct": 3.9,
+   "seniorPct": 5.8
+  },
+  {
+   "category": "Marketing & Growth",
+   "slug": "marketing",
+   "jobs": 872,
+   "medianAnnualSalaryEUR": 52400.0,
+   "salarySampleSize": 39,
+   "remotePct": 3.8,
+   "salaryPct": 5.5,
+   "seniorPct": 14.9
+  },
+  {
+   "category": "Data, KI & Machine Learning",
+   "slug": "data-ai",
+   "jobs": 797,
+   "medianAnnualSalaryEUR": 60000.0,
+   "salarySampleSize": 36,
+   "remotePct": 9.0,
+   "salaryPct": 5.3,
+   "seniorPct": 31.4
+  },
+  {
+   "category": "Hardware & Embedded",
+   "slug": "hardware-embedded",
+   "jobs": 718,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 15,
+   "remotePct": 0.1,
+   "salaryPct": 2.8,
+   "seniorPct": 7.0
+  },
+  {
+   "category": "Backend & Fullstack",
+   "slug": "backend-fullstack",
+   "jobs": 537,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 17,
+   "remotePct": 12.1,
+   "salaryPct": 4.3,
+   "seniorPct": 42.3
+  },
+  {
+   "category": "HR & Recruiting",
+   "slug": "people",
+   "jobs": 493,
+   "medianAnnualSalaryEUR": 45700.0,
+   "salarySampleSize": 37,
+   "remotePct": 2.2,
+   "salaryPct": 9.7,
+   "seniorPct": 14.8
+  },
+  {
+   "category": "DevOps, SRE & Platform",
+   "slug": "devops-sre-platform",
+   "jobs": 295,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 11,
+   "remotePct": 11.2,
+   "salaryPct": 3.7,
+   "seniorPct": 37.3
+  },
+  {
+   "category": "IT & Support",
+   "slug": "it-support",
+   "jobs": 263,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 11,
+   "remotePct": 3.4,
+   "salaryPct": 4.9,
+   "seniorPct": 11.0
+  },
+  {
+   "category": "IT-Security",
+   "slug": "security",
+   "jobs": 248,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 8,
+   "remotePct": 7.7,
+   "salaryPct": 3.2,
+   "seniorPct": 41.1
+  },
+  {
+   "category": "UX/UI Design",
+   "slug": "design",
+   "jobs": 217,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 12,
+   "remotePct": 4.6,
+   "salaryPct": 5.5,
+   "seniorPct": 21.2
+  },
+  {
+   "category": "Produktmanagement",
+   "slug": "product",
+   "jobs": 186,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 7,
+   "remotePct": 10.2,
+   "salaryPct": 5.9,
+   "seniorPct": 37.6
+  },
+  {
+   "category": "Mobile (iOS/Android)",
+   "slug": "mobile",
+   "jobs": 164,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 1,
+   "remotePct": 7.9,
+   "salaryPct": 0.6,
+   "seniorPct": 9.8
+  },
+  {
+   "category": "QA & Testing",
+   "slug": "qa-testing",
+   "jobs": 115,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 6,
+   "remotePct": 3.5,
+   "salaryPct": 5.2,
+   "seniorPct": 22.6
+  },
+  {
+   "category": "Frontend",
+   "slug": "frontend",
+   "jobs": 43,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 3,
+   "remotePct": 16.3,
+   "salaryPct": 14.0,
+   "seniorPct": 51.2
+  },
+  {
+   "category": "Engineering Management",
+   "slug": "engineering-management",
+   "jobs": 38,
+   "medianAnnualSalaryEUR": null,
+   "salarySampleSize": 2,
+   "remotePct": 15.8,
+   "salaryPct": 5.3,
+   "seniorPct": 50.0
+  }
+ ],
+ "topCities": [
+  {
+   "city": "Berlin",
+   "jobs": 4085
+  },
+  {
+   "city": "München",
+   "jobs": 2694
+  },
+  {
+   "city": "Hamburg",
+   "jobs": 2169
+  },
+  {
+   "city": "Frankfurt am Main",
+   "jobs": 1166
+  },
+  {
+   "city": "Köln",
+   "jobs": 857
+  },
+  {
+   "city": "Stuttgart",
+   "jobs": 851
+  },
+  {
+   "city": "Düsseldorf",
+   "jobs": 845
+  },
+  {
+   "city": "Bremen",
+   "jobs": 673
+  },
+  {
+   "city": "Leipzig",
+   "jobs": 572
+  },
+  {
+   "city": "Augsburg",
+   "jobs": 566
+  },
+  {
+   "city": "Hannover",
+   "jobs": 508
+  },
+  {
+   "city": "Dortmund",
+   "jobs": 494
+  },
+  {
+   "city": "Nürnberg",
+   "jobs": 420
+  },
+  {
+   "city": "Bonn",
+   "jobs": 415
+  },
+  {
+   "city": "Dresden",
+   "jobs": 405
+  }
+ ],
+ "cityTopCategories": {
+  "Berlin": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 1300
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "jobs": 547
+   },
+   {
+    "category": "Sales & Business Development",
+    "jobs": 316
+   }
+  ],
+  "München": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 894
+   },
+   {
+    "category": "Sales & Business Development",
+    "jobs": 224
+   },
+   {
+    "category": "Finanzen & Recht",
+    "jobs": 209
+   }
+  ],
+  "Hamburg": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 813
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "jobs": 216
+   },
+   {
+    "category": "Handwerk & Technik",
+    "jobs": 152
+   }
+  ],
+  "Frankfurt am Main": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 412
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "jobs": 206
+   },
+   {
+    "category": "Finanzen & Recht",
+    "jobs": 68
+   }
+  ],
+  "Köln": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 266
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "jobs": 124
+   },
+   {
+    "category": "Handwerk & Technik",
+    "jobs": 82
+   }
+  ],
+  "Stuttgart": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 350
+   },
+   {
+    "category": "Handwerk & Technik",
+    "jobs": 75
+   },
+   {
+    "category": "Ingenieurwesen & sonstige Technik",
+    "jobs": 58
+   }
+  ],
+  "Düsseldorf": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 318
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "jobs": 143
+   },
+   {
+    "category": "Handwerk & Technik",
+    "jobs": 63
+   }
+  ],
+  "Bremen": [
+   {
+    "category": "Operations & Sonstiges",
+    "jobs": 219
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "jobs": 134
+   },
+   {
+    "category": "Handwerk & Technik",
+    "jobs": 87
+   }
+  ]
+ },
+ "topEmployers": [
+  {
+   "employer": "Bosch Group",
+   "jobs": 838,
+   "topCategory": "Operations & Sonstiges"
+  },
+  {
+   "employer": "Globus Fachmaerkte",
+   "jobs": 497,
+   "topCategory": "Handel & Verkauf"
+  },
+  {
+   "employer": "KIND",
+   "jobs": 495,
+   "topCategory": "Operations & Sonstiges"
+  },
+  {
+   "employer": "SIG Sales Warenverräumung",
+   "jobs": 420,
+   "topCategory": "Operations & Sonstiges"
+  },
+  {
+   "employer": "AllDent Zahnzentrum",
+   "jobs": 336,
+   "topCategory": "Gesundheit & Pflege"
+  },
+  {
+   "employer": "Rud. Otto Meyer Technik",
+   "jobs": 336,
+   "topCategory": "Handwerk & Technik"
+  },
+  {
+   "employer": "SIXT",
+   "jobs": 305,
+   "topCategory": "Operations & Sonstiges"
+  },
+  {
+   "employer": "HIT - Markt",
+   "jobs": 276,
+   "topCategory": "Handel & Verkauf"
+  },
+  {
+   "employer": "AUTO1 Group",
+   "jobs": 250,
+   "topCategory": "Customer Success & Support"
+  },
+  {
+   "employer": "ONLY Stores Germany",
+   "jobs": 246,
+   "topCategory": "Handel & Verkauf"
+  }
+ ],
+ "topTechEmployers": [
+  {
+   "employer": "Bosch Group",
+   "techJobs": 220
+  },
+  {
+   "employer": "Rud. Otto Meyer Technik",
+   "techJobs": 84
+  },
+  {
+   "employer": "Helsing",
+   "techJobs": 73
+  },
+  {
+   "employer": "SpiraTec",
+   "techJobs": 70
+  },
+  {
+   "employer": "Scalable",
+   "techJobs": 62
+  },
+  {
+   "employer": "ELIN",
+   "techJobs": 56
+  },
+  {
+   "employer": "Isar Aerospace",
+   "techJobs": 51
+  },
+  {
+   "employer": "HiSolutions",
+   "techJobs": 51
+  },
+  {
+   "employer": "Vössing Ingenieurgesellschaft",
+   "techJobs": 49
+  },
+  {
+   "employer": "Wavestone Germany",
+   "techJobs": 49
+  }
+ ],
+ "mostNewPostings": [
+  {
+   "employer": "Bosch Group",
+   "postedLast7Days": 165
+  },
+  {
+   "employer": "Globus Fachmaerkte",
+   "postedLast7Days": 118
+  },
+  {
+   "employer": "SIG Sales Warenverräumung",
+   "postedLast7Days": 100
+  },
+  {
+   "employer": "Rud. Otto Meyer Technik",
+   "postedLast7Days": 84
+  },
+  {
+   "employer": "AllDent Zahnzentrum",
+   "postedLast7Days": 73
+  },
+  {
+   "employer": "ONLY Stores Germany",
+   "postedLast7Days": 70
+  },
+  {
+   "employer": "Wilhelm Hoyer",
+   "postedLast7Days": 65
+  },
+  {
+   "employer": "FitX",
+   "postedLast7Days": 62
+  },
+  {
+   "employer": "Omexom Energy Projects",
+   "postedLast7Days": 61
+  },
+  {
+   "employer": "SIXT",
+   "postedLast7Days": 60
+  }
+ ],
+ "seniority": {
+  "mid": 75.0,
+  "junior": 17.7,
+  "senior": 7.3
+ },
+ "ats": {
+  "softgarden": 34672,
+  "Personio": 6196,
+  "SmartRecruiters": 1763,
+  "Recruitee": 1352,
+  "Greenhouse": 859,
+  "Ashby": 593,
+  "Teamtailor": 67,
+  "Lever": 60
+ },
+ "previousWeek": {
+  "week": "2026-W46",
+  "jobsChange": 8302,
+  "jobsChangePct": 22.3,
+  "employersChange": 743,
+  "salaryPctChange": -0.4,
+  "remotePctChange": -0.3,
+  "categoryChanges": [
+   {
+    "category": "Operations & Sonstiges",
+    "change": 3243,
+    "changePct": 28.8
+   },
+   {
+    "category": "Gesundheit & Pflege",
+    "change": 1647,
+    "changePct": 27.0
+   },
+   {
+    "category": "Handwerk & Technik",
+    "change": 888,
+    "changePct": 22.4
+   },
+   {
+    "category": "Handel & Verkauf",
+    "change": 591,
+    "changePct": 24.8
+   },
+   {
+    "category": "Ingenieurwesen & sonstige Technik",
+    "change": 321,
+    "changePct": 21.8
+   },
+   {
+    "category": "Logistik, Lager & Fahrer",
+    "change": 315,
+    "changePct": 20.9
+   },
+   {
+    "category": "IT-Security",
+    "change": -297,
+    "changePct": -54.5
+   },
+   {
+    "category": "Bildung & Soziales",
+    "change": 285,
+    "changePct": 41.1
+   }
+  ],
+  "cityChanges": [
+   {
+    "city": "Berlin",
+    "change": 408
+   },
+   {
+    "city": "Hamburg",
+    "change": 249
+   },
+   {
+    "city": "München",
+    "change": 228
+   },
+   {
+    "city": "Augsburg",
+    "change": 194
+   },
+   {
+    "city": "Frankfurt am Main",
+    "change": 144
+   },
+   {
+    "city": "Düsseldorf",
+    "change": 118
+   }
+  ],
+  "employerChanges": [
+   {
+    "employer": "Bosch Group",
+    "change": 0
+   },
+   {
+    "employer": "Globus Fachmaerkte",
+    "change": 0
+   },
+   {
+    "employer": "AllDent Zahnzentrum",
+    "change": 0
+   },
+   {
+    "employer": "Rud. Otto Meyer Technik",
+    "change": 0
+   },
+   {
+    "employer": "SIXT",
+    "change": 0
+   },
+   {
+    "employer": "HIT - Markt",
+    "change": 1
+   },
+   {
+    "employer": "AUTO1 Group",
+    "change": 0
+   },
+   {
+    "employer": "ONLY Stores Germany",
+    "change": 0
+   }
+  ]
+ }
+}
