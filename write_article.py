@@ -32,6 +32,8 @@ Harte Regeln:
 4. Nenne Arbeitgeber nur mit Zahlen aus dem JSON, ohne Wertung über das Unternehmen.
 5. Verlinke 4–8 passende interne Seiten mit Markdown-Links, ausschließlich aus der Liste ALLOWED_LINKS.
 6. Format: Markdown mit 3–5 Zwischenüberschriften (##), kurzen Absätzen, höchstens einer Aufzählungsliste. Keine H1 (der Titel wird separat gesetzt). 600–900 Wörter.
+7a. Zu Tech zählt auch „Ingenieurwesen & sonstige Technik“. Sprich vom „größten Tech-Bereich“ nur mit Blick auf alle Tech-Kategorien; für Software/Daten sag „unter den Software- und Datenrollen“.
+7b. Wächst der Index stark (employersChange in previousWeek deutlich positiv), ist das vor allem breitere Abdeckung, kein Marktwachstum: so benennen.
 7. Schließe mit einem kurzen Abschnitt „## Methodik“ (2–3 Sätze: Datenquelle, Stichtag dataDate, Hinweis, dass der Text automatisch mit KI aus den Indexdaten erstellt wurde).
 
 Titel: max. 60 Zeichen, enthält die Kalenderwoche (z. B. „KW 46“) und die wichtigste Erkenntnis. Description: max. 155 Zeichen."""

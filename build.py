@@ -8,9 +8,11 @@ Output: dist/  (plain HTML + CSS + sitemap, deployable anywhere)
 
 No third-party dependencies. Usage: python3 build.py [--snapshot]
 """
+import csv
 import datetime as dt
 import gzip
 import html
+import io
 import json
 import re
 import shutil
@@ -250,7 +252,7 @@ def page(path, title, desc, body, crumbs=(), jsonld=None):
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}"><meta property="og:url" content="{url}"><meta property="og:type" content="website">
 <link rel="stylesheet" href="/style.css"><link rel="icon" href="/favicon.svg" type="image/svg+xml">{ld}</head>
 <body><header class="top"><div class="wrap"><a class="brand" href="/">{e(CFG["brand"])}</a>
-<nav><a href="/jobs/">Bereiche</a><a href="/staedte/">Städte</a><a href="/unternehmen/">Unternehmen</a><a href="/ausbildung/">Ausbildung</a><a href="/werkstudent/">Werkstudent</a><a href="/analysen/">Analysen</a><a href="/hiring-signale/" class="cta-link">Hiring-Signale</a></nav></div></header>
+<nav><a href="/jobs/">Bereiche</a><a href="/staedte/">Städte</a><a href="/unternehmen/">Unternehmen</a><a href="/ausbildung/">Ausbildung</a><a href="/werkstudent/">Werkstudent</a><a href="/analysen/">Analysen</a><a href="/hiring-signale/" class="cta-link">Hiring-Signale · ab 49 €</a></nav></div></header>
 <main class="wrap">{crumb_html}{body}</main>
 <footer><div class="wrap"><p>Daten: öffentliche Karriereseiten von {n(STATS["companies"])} Unternehmen, Stand {fmt_date(STATS["date"])}. Wöchentlich aktualisiert. <a href="/methodik/">Methodik</a> · <a href="/daten/">Daten-Download</a> · <a href="/impressum/">Impressum</a> · <a href="/datenschutz/">Datenschutz</a></p>
 <p>Alle Stellen verlinken direkt auf die Karriereseite des Unternehmens. Keine Gewähr für Vollständigkeit.</p></div></footer></body></html>"""
@@ -299,7 +301,8 @@ def stat_tiles(items):
 def cta(context=""):
     return f"""<aside class="cta"><h3>Hiring-Signale für Ihren Vertrieb</h3>
 <p>Wer gerade {e(context) or "DevOps-, Daten- oder Security-Rollen"} ausschreibt, hat Budget und Bedarf. Wir liefern Ihnen jede Woche eine Liste der Unternehmen aus Ihrer Zielgruppe, die neue passende Stellen veröffentlicht haben, mit Link zur Ausschreibung.</p>
-<p><a class="btn" href="/hiring-signale/">Beispiel-Liste ansehen</a> <a class="btn ghost" href="{CFG.get("indexActorUrl", CFG["actorUrl"])}" rel="noopener">Alle Stellen per API durchsuchen</a></p></aside>"""
+<p><b>Ab 49 € pro Monat</b>, monatlich kündbar, Rechnung. <a href="/hiring-signale/#beispiel">Beispiel-Liste dieser Woche ansehen</a>.</p>
+<p><a class="btn" href="/hiring-signale/">Hiring-Signale ansehen</a> <a class="btn ghost" href="{CFG.get("indexActorUrl", CFG["actorUrl"])}" rel="noopener">Alle Stellen per API durchsuchen</a></p></aside>"""
 
 
 # ---------------------------------------------------------------- pages
@@ -409,6 +412,9 @@ def build(jobs, snaps, data_date=None):
 <p class="lead">Jede Woche lesen wir die Karriereseiten von {n(len(by_company))} Arbeitgebern in Deutschland, Österreich und der Schweiz aus: vom Tech-Startup über Kliniken und Handwerksbetriebe bis zum Konzern. Ohne Jobbörsen-Dubletten, ohne Personalvermittler, jede Stelle mit Link zur Originalausschreibung.</p>
 {stat_tiles([(n(len(jobs)), "offene Stellen"), (n(len(by_company)), "Arbeitgeber"), (n(len(tech)) + " " + delta(len(tech), prev_tech_total), "davon Tech-Stellen"), (n(trainee), "Ausbildung, Werkstudent, Praktikum")])}
 <p class="muted">Stand: {fmt_date(date)}</p></section>
+<aside class="cta offer"><h2>Für Vertrieb, Recruiting und Personaldienstleister: Hiring-Signale</h2>
+<p>Die Seite ist kostenlos. Zusätzlich bieten wir einen <b>bezahlten Service</b> an: jeden Montag die Liste der Unternehmen, die in <b>Ihren</b> Zielrollen und Regionen neue Stellen ausgeschrieben haben, mit Link zu jeder Ausschreibung. <b>Ab 49 € pro Monat</b>, monatlich kündbar, die erste Liste kostenlos.</p>
+<p><a class="btn" href="/hiring-signale/">So funktioniert es</a> <a class="btn ghost" href="/hiring-signale/#beispiel">Beispiel-Liste dieser Woche</a></p></aside>
 {latest_article_teaser()}
 <div class="grid2"><section><h2>Wer sucht gerade die meisten Leute?</h2>
 <table class="rank"><thead><tr><th>#</th><th>Arbeitgeber</th><th class="r">Stellen</th><th class="r">davon Tech</th></tr></thead><tbody>{top_rows}</tbody></table>
@@ -633,6 +639,7 @@ def build(jobs, snaps, data_date=None):
 
     analysen_pages()
     daten_pages(jobs, by_company, names, date)
+    signals_page(jobs, names, date)
     static_pages()
     (DIST / "404.html").write_text((DIST / "index.html").read_text().replace("<title>", "<title>Seite nicht gefunden · ", 1)
                                    .replace('<main class="wrap">', '<main class="wrap"><h1>Diese Seite gibt es nicht (mehr)</h1><p class="lead">Vielleicht ist die Stelle besetzt oder das Unternehmen sucht gerade niemanden. Hier die aktuelle Übersicht:</p>', 1)
@@ -806,6 +813,91 @@ def daten_pages(jobs, by_company, names, date):
                   "distribution": [{"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": f"{BASE}/daten/{f}.csv", "name": d} for f, d, _ in files]}])
 
 
+# (category, file slug, label, stricter title filter for the public sample so it stays credible)
+SIGNAL_SAMPLES = [("devops-sre-platform", "devops", "DevOps, SRE & Platform", re.compile(r"devops|\bsre\b|site reliability|platform|cloud|kubernetes|infrastru|system ?admin|systemadmin|linux|netzwerk|network", re.I)),
+                  ("healthcare", "pflege", "Gesundheit & Pflege", re.compile(r"pflege|krankenschwester|gesundheits|\bmfa\b|medizinische|\bzfa\b|zahnmedizin|arzt|ärztin|therap|hebamme|altenpfleg", re.I))]
+
+
+def short(t, k):
+    return t if len(t) <= k else t[:k].rsplit(' ', 1)[0].rstrip(' |,-') + ' …'
+
+
+def signals_page(jobs, names, date):
+    """Paid offer page (council 2026-11-16: visible price, public sample, inquiry by e-mail + invoice, no checkout)."""
+    import urllib.parse as up
+    week_ago = (dt.date.fromisoformat(date) - dt.timedelta(days=7)).isoformat()
+    # posting date first: in the index's first weeks every job's firstSeen is recent, which would overstate "new"
+    is_new = lambda j: (j["postedAt"] or j.get("firstSeen") or "") >= week_ago  # noqa: E731
+    out = DIST / "hiring-signale"
+    out.mkdir(parents=True, exist_ok=True)
+    samples, previews = [], []
+    for cat, slug, label, title_re in SIGNAL_SAMPLES:
+        by = defaultdict(list)
+        for j in jobs:
+            if j["cat"] == cat and title_re.search(j["title"]):
+                by[j["company"]].append(j)
+        rows = []
+        for c, js in by.items():
+            new = [j for j in js if is_new(j)]
+            if not new:
+                continue
+            new.sort(key=lambda j: j["postedAt"] or j.get("firstSeen") or "", reverse=True)
+            locs = Counter(c2 for j in new for c2 in j["cities"])
+            rows.append((names[c], len(new), len(js), " | ".join(dict.fromkeys(j["title"] for j in new[:3])),
+                         ", ".join(x for x, _ in locs.most_common(3)), new[0]["url"] or ""))
+        rows.sort(key=lambda r: (-r[1], -r[2], r[0]))
+        rows = rows[:25]
+        b = io.StringIO()
+        w = csv.writer(b, delimiter=";")
+        w.writerow(["unternehmen", "neue_stellen_7_tage", "offene_stellen_gesamt", "beispiele_neue_stellen", "standorte", "link_neueste_stelle"])
+        w.writerows(rows)
+        fname = f"beispiel-{slug}-{date}.csv"
+        (out / fname).write_text("\ufeff" + b.getvalue())
+        samples.append((fname, label, len(rows), sum(1 for c, js in by.items() if any(is_new(j) for j in js))))
+        previews.append((label, rows[:5]))
+    mail = CFG["contactHref"] + "?" + up.urlencode({"subject": "Hiring-Signale: kostenlose erste Liste",
+        "body": "Hallo,\n\nich hätte gern eine kostenlose erste Liste.\n\nGesuchte Rollen (z. B. DevOps, SAP, Pflege, Vertrieb):\nRegion(en):\nWofür (z. B. Vertrieb, Recruiting, Marktanalyse):\nFirma:\n\nViele Grüße"}, quote_via=up.quote)
+    dl = "".join(f'<li><a href="/hiring-signale/{f}" download>{e(l)}: die {k} Unternehmen mit den meisten neuen Stellen (CSV)</a> <span class="muted">· insgesamt {n(t)} Unternehmen mit neuen Stellen in 7 Tagen</span></li>' for f, l, k, t in samples)
+    prev_html = "".join(f'<h3>{e(l)}: Auszug</h3><div class="tw"><table class="rank"><thead><tr><th>Unternehmen</th><th class="r">neu (7 Tage)</th><th class="r">offen gesamt</th><th>Beispiele</th><th>Standorte</th></tr></thead><tbody>'
+                        + "".join(f'<tr><td>{e(r[0])}</td><td class="r">{r[1]}</td><td class="r">{r[2]}</td><td>{e(short(r[3], 110))}</td><td>{e(r[4])}</td></tr>' for r in rows) + "</tbody></table></div>"
+                        for l, rows in previews)
+    faq = [("Woher stammen die Daten?", f"Aus den öffentlichen Karriereseiten von {n(STATS['companies'])} Arbeitgebern in Deutschland, Österreich und der Schweiz, wöchentlich ausgelesen. Jede Zeile verlinkt auf die Originalausschreibung."),
+           ("Enthält die Liste Ansprechpartner oder E-Mail-Adressen?", "Nein. Die Liste enthält nur Unternehmensdaten: Name, neue Stellen, Standorte, Links. Keine personenbezogenen Kontaktdaten."),
+           ("Darf ich die Unternehmen anschreiben?", "Die Liste zeigt, wo ein Bedarf besteht. Für die Kontaktaufnahme gelten die üblichen Regeln: Werbe-E-Mails an Unternehmen brauchen in Deutschland grundsätzlich eine vorherige Einwilligung (§ 7 UWG); Anrufe bei Unternehmen setzen eine zumindest mutmaßliche Einwilligung voraus. Viele Kunden nutzen die Liste deshalb für Anschreiben per Post, LinkedIn-Kontakte, Bewerbungen von Freelancern oder die Priorisierung bestehender Kontakte. Keine Rechtsberatung."),
+           ("Was fehlt?", "Unternehmen, deren Karriereseite über Workday, SAP SuccessFactors o. ä. läuft (darunter viele Konzerne), sowie Stellen, die nur auf Jobbörsen erscheinen. Die Zuordnung zu Bereichen erfolgt automatisch am Stellentitel und kann im Einzelfall falsch sein."),
+           ("Wie wird bezahlt?", "Per Rechnung, monatlich. Kündigen können Sie jederzeit zum Monatsende per E-Mail. Die erste Liste ist kostenlos und unverbindlich."),
+           ("Geht das auch selbst, per API?", f'Ja. Technische Teams können den Index über die <a href="{CFG.get("indexActorUrl", CFG["actorUrl"])}">DACH Jobs API</a> selbst abfragen (Abrechnung pro Ergebnis, Modus „Unternehmen“ mit einer Zeile pro einstellendem Unternehmen). Der Service hier ist für alle, die die Liste fertig gefiltert per E-Mail möchten.')]
+    faq_html = "".join(f"<details><summary>{e(q)}</summary><p>{a}</p></details>" for q, a in faq)
+    body = f"""<h1>Hiring-Signale: wer in Ihrer Zielgruppe gerade einstellt</h1>
+<p class="lead">Ein Unternehmen, das drei DevOps-Engineers sucht, hat ein Infrastruktur-Thema. Eine Klinikgruppe mit 40 neuen Pflegestellen braucht Unterstützung. Wir liefern Ihnen jeden Montag die Liste der Unternehmen, die in <b>Ihren</b> Rollen und Regionen neue Stellen ausgeschrieben haben.</p>
+<p><a class="btn" href="{e(mail)}">Erste Liste kostenlos anfordern</a> <a class="btn line" href="#beispiel">Beispiel dieser Woche ansehen</a></p>
+<div class="grid2"><section><h2>Für wen</h2><ul>
+<li><b>Personaldienstleister und Personalvermittler</b>: Unternehmen mit akutem Bedarf in Ihrem Fachbereich.</li>
+<li><b>IT-Dienstleister, Agenturen, Freelancer</b>: wer DevOps, Data, SAP oder Security aufbaut, braucht oft auch externe Hilfe.</li>
+<li><b>SaaS- und B2B-Vertrieb</b>: Wachstum und neue Teams als Anlass für den Erstkontakt.</li>
+<li><b>Marktanalyse</b>: Wer stellt in Ihrer Branche und Region ein, Woche für Woche.</li></ul></section>
+<section><h2>Preis</h2><div class="cta"><p class="big"><b>ab 49 € / Monat</b> zzgl. USt.</p><ul>
+<li>1 Rollenbereich (z. B. DevOps, Pflege, SAP) und 1 Region (z. B. Bayern, DACH-weit)</li>
+<li>Jeden Montag als CSV/Excel per E-Mail</li>
+<li>Monatlich kündbar, Zahlung per Rechnung</li>
+<li>Mehr Rollen oder Regionen: Preis nach Umfang</li></ul>
+<p><a class="btn" href="{e(mail)}">Erste Liste kostenlos anfordern</a></p></div></section></div>
+<section><h2>So funktioniert es</h2><ol>
+<li>Sie nennen uns per E-Mail Ihre Zielrollen und Regionen.</li>
+<li>Sie erhalten eine kostenlose erste Liste und prüfen, ob sie Ihnen nützt.</li>
+<li>Passt es, kommt die Liste ab dann jeden Montag per E-Mail; die Rechnung monatlich.</li></ol></section>
+<section id="beispiel"><h2>Beispiel-Listen dieser Woche (Stand {fmt_date(date)})</h2>
+<p>So sieht eine Liste aus. Die Beispiele zeigen die Unternehmen mit den meisten neuen Stellen der letzten 7 Tage in zwei Bereichen, DACH-weit. Ihre Liste ist auf Ihre Rollen und Regionen gefiltert und vollständig.</p>
+<ul>{dl}</ul>{prev_html}</section>
+<section><h2>Häufige Fragen</h2>{faq_html}</section>"""
+    page("/hiring-signale/", fit_title("Hiring-Signale: Unternehmen, die gerade einstellen, wöchentlich als Liste"),
+         f"Jeden Montag die Liste der Unternehmen in DACH, die in Ihren Zielrollen und Regionen neue Stellen ausgeschrieben haben. Ab 49 €/Monat, erste Liste kostenlos.",
+         body, crumbs=[("Hiring-Signale", None)],
+         jsonld=[{"@context": "https://schema.org", "@type": "Service", "name": "Hiring-Signale", "provider": {"@type": "Organization", "name": CFG["brand"]},
+                  "areaServed": ["DE", "AT", "CH"], "offers": {"@type": "Offer", "price": "49", "priceCurrency": "EUR", "description": "pro Monat, zzgl. USt., monatlich kündbar"}},
+                 {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": re.sub("<[^>]+>", "", a)}} for q, a in faq]}])
+
+
 def latest_article_teaser():
     files = sorted((ROOT / "content" / "analysen").glob("*.json"))
     if not files:
@@ -867,18 +959,6 @@ def static_pages():
 <p>Es werden keine Bewerberdaten oder personenbezogenen Daten erhoben. Jede Stelle verlinkt auf die Originalausschreibung.</p>
 <p>Die Daten stammen aus dem <a href="{CFG["actorUrl"]}">Career Site Jobs Scraper</a>. Den kompletten, wöchentlich aktualisierten DACH-Stellenindex (alle Branchen, mit Filtern für Stadt, Bereich, Remote und Gehalt) gibt es als <a href="{CFG.get("indexActorUrl", CFG["actorUrl"])}">DACH Jobs API</a>. Entwickler finden Beispiele unter <a href="https://github.com/goldfoot/career-site-jobs-api">github.com/goldfoot/career-site-jobs-api</a>.</p>
 <p>Fehlt ein Unternehmen? <a href="{CFG["contactHref"]}">Schreiben Sie uns</a>.</p>"""), crumbs=[("Methodik", None)])
-    page("/hiring-signale/", "Hiring-Signale: wöchentliche Lead-Liste für B2B-Vertrieb", "Welche Unternehmen in Ihrer Zielgruppe stellen gerade passende Rollen ein? Wöchentliche Liste als CSV.", md(f"""
-<h1>Hiring-Signale für Ihren Vertrieb</h1>
-<p class="lead">Ein Unternehmen, das drei DevOps-Engineers sucht, hat ein Infrastruktur-Thema. Eines, das einen „Head of Data“ sucht, baut gerade sein Datenteam auf. Für Dienstleister, Agenturen, Freelancer und SaaS-Anbieter sind das die besten Zeitpunkte für eine Kontaktaufnahme.</p>
-<h2>Was Sie bekommen</h2>
-<ul><li>Jeden Montag eine CSV/Excel-Liste: Unternehmen, neue passende Stellen, Standorte, Link zur Ausschreibung.</li>
-<li>Gefiltert auf Ihre Rollen (z. B. DevOps, Data, Security, SAP, Salesforce) und Regionen.</li>
-<li>Nur Unternehmensdaten, keine personenbezogenen Kontaktdaten.</li></ul>
-<h2>Selbst machen</h2>
-<p>Technisch versiert? Die <a href="{CFG.get("indexActorUrl", CFG["actorUrl"])}">DACH Jobs API</a> durchsucht alle Stellen per Stichwort, Stadt, Bereich und Seniorität, mit „nur neue Stellen“-Modus für wöchentliche Alerts. Einzelne Unternehmen live abfragen: <a href="{CFG["actorUrl"]}">Career Site Jobs Scraper</a>. Abrechnung pro gefundener Stelle.</p>
-<h2>Fertig geliefert</h2>
-<p>{CFG["leadOfferText"]}</p>
-<p><a class="btn" href="{CFG["contactHref"]}">Beispiel-Liste anfordern</a></p>"""), crumbs=[("Hiring-Signale", None)])
     page("/impressum/", "Impressum", "Impressum", CFG["impressumHtml"], crumbs=[("Impressum", None)])
     page("/datenschutz/", "Datenschutz", "Datenschutzerklärung", CFG["privacyHtml"], crumbs=[("Datenschutz", None)])
 
