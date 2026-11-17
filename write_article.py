@@ -6,7 +6,8 @@ Claude writes the article from data/weekly/<week>.json only. Guardrails before a
   - internal links must point to pages that exist,
   - one retry with the list of problems; if it still fails, nothing is written and the build goes on without a new article.
 
-Needs ANTHROPIC_API_KEY (GitHub secret). Without it the script exits 0 and does nothing.
+Credentials: in CI via workload identity federation (ANTHROPIC_FEDERATION_RULE_ID … + ANTHROPIC_IDENTITY_TOKEN_FILE, set by
+the workflow); locally ANTHROPIC_API_KEY also works. Without credentials the script exits 0 and does nothing.
 Usage: python3 write_article.py [--week 2026-W46] [--force]
 """
 import argparse
@@ -146,9 +147,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--week")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--ping", action="store_true", help="only check the API connection (tiny request, writes nothing)")
     a = ap.parse_args()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY not set: skipping article")
+    tok = os.environ.get("ANTHROPIC_IDENTITY_TOKEN_FILE")
+    federated = bool(os.environ.get("ANTHROPIC_FEDERATION_RULE_ID") and tok and os.path.exists(tok) and os.path.getsize(tok) > 100)
+    if not (federated or os.environ.get("ANTHROPIC_API_KEY")):
+        print("no Anthropic credentials (federation or API key): skipping article")
+        return
+    if a.ping:
+        import anthropic
+        r = anthropic.Anthropic().messages.create(model=MODEL, max_tokens=8, messages=[{"role": "user", "content": "Antworte nur mit: OK"}])
+        print(f"API ping ({'federation' if federated else 'API key'}): {r.content[0].text.strip()!r}, {r.usage.input_tokens}+{r.usage.output_tokens} tokens")
         return
     files = sorted((B.DATA / "weekly").glob("*.json"))
     path = B.DATA / "weekly" / f"{a.week}.json" if a.week else files[-1]

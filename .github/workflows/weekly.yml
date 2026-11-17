@@ -2,7 +2,9 @@ name: weekly-build
 on:
   schedule:
     - cron: "0 7 * * 1"   # Mondays 07:00 UTC, after the DACH index refresh (Mondays 06:00 Europe/Berlin, ~30 min)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      ping: { description: "Only test the Anthropic API connection (no article)", type: boolean, default: false }
 permissions:
   contents: write
   pages: write
@@ -19,12 +21,23 @@ jobs:
         run: python3 fetch.py --index
       - name: Weekly facts (input for the AI analysis)
         run: python3 weekly_facts.py
-      - name: AI weekly analysis (skipped without ANTHROPIC_API_KEY; fact-checked, not published if the check fails)
+      # Anthropic via workload identity federation: no stored API key. GitHub's short-lived OIDC token is exchanged by the
+      # SDK; the federation rule only accepts this repository on refs/heads/main. IDs are stored as secrets (owner's choice;
+      # they are not credentials). Skipped while they are missing; the article is fact-checked and not published if the check fails.
+      - name: AI weekly analysis (Claude via workload identity federation)
         continue-on-error: true
-        env: { ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}" }
+        env:
+          ANTHROPIC_FEDERATION_RULE_ID: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
+          ANTHROPIC_ORGANIZATION_ID: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
+          ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ secrets.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+          ANTHROPIC_IDENTITY_TOKEN_FILE: ${{ runner.temp }}/anthropic-oidc.jwt
         run: |
-          pip install -q anthropic
-          python3 write_article.py
+          if [ -z "$ANTHROPIC_FEDERATION_RULE_ID" ]; then echo "federation not configured: skipping article"; exit 0; fi
+          curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" | jq -r .value > "$ANTHROPIC_IDENTITY_TOKEN_FILE"
+          pip install -q --upgrade anthropic
+          python3 write_article.py ${{ inputs.ping && '--ping' || '' }}
       - name: Build site (+ weekly snapshot)
         run: python3 build.py --snapshot
       - name: Commit snapshot
