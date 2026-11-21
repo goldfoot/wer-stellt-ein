@@ -52,3 +52,28 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--mut);font-si
 
 .cta.offer{border-width:2px;margin:18px 0}.cta.offer h2{margin-top:0}.cta .big{font-size:1.5rem;margin:.2em 0}
 .btn.line{background:#fff;color:var(--acc);border:1px solid var(--acc)}
+/* mobile (owner review 2026-11-18): nav as one swipeable row, header not sticky, bigger tap targets, compact tables */
+@media(max-width:720px){
+.top{position:static}
+.top .wrap{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:2px;padding-top:8px}
+.top nav{display:flex;width:100%;max-width:100%;min-width:0;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0 8px;-webkit-mask-image:linear-gradient(to right,#000 88%,transparent);mask-image:linear-gradient(to right,#000 88%,transparent)}
+.top nav::-webkit-scrollbar{display:none}
+.top nav a{margin:0 6px 0 0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:#fff;flex:none}
+.top nav .cta-link{border-color:var(--acc2)}
+footer a{display:inline-block;padding:6px 0}.crumbs a{display:inline-block;padding:6px 0}
+table{font-size:.88rem}th,td{padding-left:6px!important;padding-right:6px!important}
+}
+/* job tables as cards on phones: title first, then company · place · date */
+@media(max-width:600px){
+h1,h2,h3{overflow-wrap:break-word}h1{hyphens:auto}
+.tw:has(table.jobs){overflow:visible;border:0;background:transparent}
+table.jobs,table.jobs tbody{display:block;background:transparent}
+table.jobs thead{display:none}
+table.jobs tr{display:flex;flex-wrap:wrap;gap:2px 10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
+table.jobs td{display:block;border:0;padding:0!important;color:var(--mut);font-size:.88rem}
+table.jobs td:has(a[target]){order:-1;flex:1 0 100%;color:var(--fg);font-size:.98rem}
+table.jobs td.nw::before{content:"· "}
+}
+.grid2>*{min-width:0}
+@media(max-width:600px){.tiles{grid-template-columns:1fr 1fr;gap:8px}.tiles>*{padding:12px!important}}
+.note{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:20px 0;font-size:.95rem}

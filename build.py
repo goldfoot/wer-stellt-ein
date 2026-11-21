@@ -193,6 +193,31 @@ e = html.escape
 TODAY = dt.date.today()
 
 
+SAL_UNIT = {"year": "Jahr", "month": "Monat", "hour": "Std.", "week": "Woche", "day": "Tag"}
+
+
+def salary_de(j):
+    """Salary chip in German ("3.761–4.413 € / Monat"); the source text is English ("EUR 3,761 – 4,413 / month")."""
+    lo, hi = j.get("salaryMin"), j.get("salaryMax")
+    if lo is None and hi is None:
+        return j.get("salaryText") or ""
+    iv = (j.get("salaryInterval") or "").lower()
+    unit = next((de for en, de in SAL_UNIT.items() if en in iv), "")
+
+    def num(v):
+        v = float(v)
+        txt = f"{v:,.0f}" if v >= 1000 or v == int(v) else f"{v:,.2f}"
+        return txt.replace(",", "X").replace(".", ",").replace("X", ".")
+    vals = [v for v in (lo, hi) if v is not None]
+    # implausible for the stated unit (e.g. "1.060 / year" is a monthly salary tagged as yearly): show nothing rather than a wrong number
+    limits = {"Jahr": (10000, 1000000), "Monat": (300, 50000), "Std.": (5, 500)}
+    if unit in limits and not all(limits[unit][0] <= float(v) <= limits[unit][1] for v in vals):
+        return ""
+    rng = num(vals[0]) if len(vals) == 1 or float(vals[0]) == float(vals[-1]) else f"{num(vals[0])}–{num(vals[-1])}"
+    cur = {"EUR": "€"}.get(j.get("salaryCurrency") or "", j.get("salaryCurrency") or "")
+    return f"{rng} {cur}".strip() + (f" / {unit}" if unit else "")
+
+
 def fmt_date(d):
     if not d:
         return "–"
@@ -285,8 +310,9 @@ def job_table(jobs, show_company=True, limit=None):
             tags.append('<b class="t remote">Remote</b>')
         elif j["hybrid"]:
             tags.append('<b class="t hybrid">Hybrid</b>')
-        if j["salaryText"]:
-            tags.append(f'<b class="t sal">{e(j["salaryText"])}</b>')
+        sal = salary_de(j)
+        if sal:
+            tags.append(f'<b class="t sal">{e(sal)}</b>')
         rows.append(f'<tr>{comp}<td><a href="{e(j["url"] or "#")}" rel="nofollow noopener" target="_blank">{e(j["title"])}</a> {"".join(tags)}</td>'
                     f'<td>{e(", ".join(j["cities"]) or (j["location"] or "")[:60])}</td><td class="nw">{fmt_date(j["postedAt"])}</td></tr>')
     head = ("<th>Unternehmen</th>" if show_company else "") + "<th>Stelle</th><th>Ort</th><th>Veröffentlicht</th>"
@@ -423,7 +449,7 @@ def build(jobs, snaps, data_date=None):
 <h2>Stellen nach Stadt</h2>{bar_rows(city_count, len(jobs), str, lambda k: f"/staedte/{city_slug[k]}/" if k in cities_with_page else None, 10)}
 <p><a href="/ausbildung/">Ausbildungsplätze →</a> · <a href="/werkstudent/">Werkstudenten-Jobs &amp; Praktika →</a></p></section></div>
 <div class="grid2"><section><h2>Tech: wer sucht die meisten Tech-Leute?</h2>
-<table class="rank"><thead><tr><th>#</th><th>Unternehmen</th><th class="r">Tech-Stellen</th><th class="r">Δ Woche</th></tr></thead><tbody>{tech_rows}</tbody></table></section>
+<div class="tw"><table class="rank"><thead><tr><th>#</th><th>Unternehmen</th><th class="r">Tech-Stellen</th><th class="r">Δ Woche</th></tr></thead><tbody>{tech_rows}</tbody></table></div></section>
 <section><h2>Tech-Bereiche</h2>{bar_rows(Counter(j["cat"] for j in tech), len(tech), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}</section></div>
 <section><h2>Neu diese Woche</h2>{job_table(new_week, limit=30) if new_week else '<p class="muted">Noch keine Daten.</p>'}</section>
 {cta()}"""
@@ -441,7 +467,7 @@ def build(jobs, snaps, data_date=None):
         nm = f'<a href="/unternehmen/{c}/">{e(names[c])}</a>' if c in PAGE_COS else e(names[c])
         rows.append(f'<tr><td>{nm}</td><td class="r">{n(len(js))}</td><td class="r">{n(t)}</td><td>{e(CAT_LABEL.get(Counter(j["cat"] for j in js).most_common(1)[0][0], ""))}</td></tr>')
         if c in PAGE_COS:
-            company_page(c, js, prev, city_slug, cities_with_page)
+            company_page(c, js, prev, city_slug, cities_with_page, similar_companies(c, by_company, names))
     page("/unternehmen/", fit_title(f"Welche Firmen stellen ein? {n(len(by_company))} Arbeitgeber in DACH"),
          f"{n(len(by_company))} Arbeitgeber in Deutschland, Österreich und der Schweiz mit offenen Stellen, sortiert nach Anzahl. Wöchentlich aktualisiert.",
          f'<h1>Arbeitgeber, die gerade einstellen</h1><p class="lead">{n(len(by_company))} Arbeitgeber mit offenen Stellen in DACH, Stand {fmt_date(date)}. '
@@ -515,7 +541,7 @@ def build(jobs, snaps, data_date=None):
         city_links.append(f'<tr><td><a href="/staedte/{city_slug[city]}/">{e(city)}</a></td><td>{COUNTRY_NAME[cc]}</td><td class="r">{n(len(js))}</td><td class="r">{n(len(t))}</td></tr>')
         top_cat = Counter(j["cat"] for j in js).most_common(1)[0]
         page(f"/staedte/{city_slug[city]}/", fit_title(f"Jobs in {city}: {n(len(js))} offene Stellen ({mon})", f"Jobs in {city}: {n(len(js))} offene Stellen", f"Jobs {city}: {n(len(js))} Stellen"),
-             f"Wer stellt in {city} ein? {n(len(js))} offene Stellen bei {n(len(comp))} Arbeitgebern, davon {n(len(t))} Tech-Stellen. Direkt von den Karriereseiten, wöchentlich aktualisiert.",
+             city_desc(city, js, comp, names),
              f'<h1>Wer stellt in {e(city)} ein?</h1><p class="lead">{n(len(js))} offene Stellen bei {n(len(comp))} Arbeitgebern ({COUNTRY_NAME[cc]}), Platz {rank} unter {len(cities_with_page)} Städten im Index. '
              f'Größter Bereich: {e(CAT_LABEL[top_cat[0]])} ({n(top_cat[1])}). Tech-Stellen: {n(len(t))}. Am meisten sucht {e(names[comp.most_common(1)[0][0]])} ({comp.most_common(1)[0][1]}).{new_note(js)}</p>'
              + insights([
@@ -655,7 +681,47 @@ def build(jobs, snaps, data_date=None):
     print(f"built {len(SITEMAP)} pages · {n(len(jobs))} jobs · {n(len(tech))} tech · {len(by_company)} companies ({len(PAGE_COS)} with page)")
 
 
-def company_page(c, js, prev, city_slug, cities_with_page=()):
+def short_title(t):
+    """Job title for snippets: without gender tags, bracket notes and location suffixes."""
+    t = re.sub(r"\s*[(\[][^)\]]*[)\]]", "", t or "")
+    t = re.sub(r"\s*\b[mwdfx]\s*/\s*[mwdfx](?:\s*/\s*[mwdfx])?\b", "", t, flags=re.I)
+    t = re.split(r"\s+[-–|]\s+|(?<!-),\s", t)[0].strip(" -–|/*")
+    if not re.search(r"[a-zäöüß]", t) or GENERIC_TITLE.match(t):
+        return ""  # all caps or generic ("Initiativbewerbung", "Ausbildung 2027") says nothing
+    return t if 3 <= len(t) <= 45 else ""
+
+
+GENERIC_TITLE = re.compile(r"(?i)^(?:initiativbewerbung|ausbildung|praktikum|werkstudent(?:in)?|duales studium|bachelor|master|trainee|aushilfe|minijob)(?:\s+(?:\d{4}|of\b.*|\w+\s?\d{4}))?$")
+
+
+def example_titles(js, k=2):
+    seen, out = set(), []
+    for t, _ in Counter(short_title(j["title"]) for j in js).most_common():
+        if t and not any(t.lower() in x or x in t.lower() for x in seen):  # no near-duplicates ("X" and "X in Lübbenau")
+            seen.add(t.lower()); out.append(t)
+        if len(out) == k:
+            break
+    return out
+
+
+_TOP = {}
+
+
+def similar_companies(c, by_company, names, k=6):
+    """Employers with their own page that share the main location, then the main field; most jobs first."""
+    if not _TOP:
+        for co, js in by_company.items():
+            if co in PAGE_COS:
+                ci = Counter(x for j in js for x in j["cities"]).most_common(1)
+                _TOP[co] = (ci[0][0] if ci else None, Counter(j["cat"] for j in js).most_common(1)[0][0], len(js))
+    city, cat, _ = _TOP.get(c, (None, None, 0))
+    rank = lambda o: -_TOP[o][2]  # noqa: E731
+    same_city = sorted((o for o in _TOP if o != c and city and _TOP[o][0] == city), key=rank)
+    same_cat = sorted((o for o in _TOP if o != c and _TOP[o][1] == cat and o not in same_city), key=rank)
+    return [(o, names[o], _TOP[o][2], "city" if o in same_city else "cat") for o in (same_city + same_cat)[:k]]
+
+
+def company_page(c, js, prev, city_slug, cities_with_page=(), similar=()):
     name = js[0]["companyName"]
     t = [j for j in js if j["cat"] in TECH]
     cats = Counter(j["cat"] for j in js)
@@ -691,13 +757,51 @@ def company_page(c, js, prev, city_slug, cities_with_page=()):
             break
     USED_TITLES.add(title)
     page(f"/unternehmen/{c}/", title,
-         f"Stellt {name} ein? {n(len(js))} offene Stellen" + (f", vor allem in {top_city}" if top_city else "") + f": {', '.join(CAT_LABEL[k] for k, _ in cats.most_common(2))}. Direkt von der Karriereseite, wöchentlich aktualisiert.",
+         company_desc(name, js, top_city, cats),
          f'<h1>Stellt {e(name)} ein?</h1><p class="lead">{" ".join(facts)}</p>'
          f'<div class="grid2"><section><h2>Bereiche</h2>{bar_rows(cats, len(js), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}</section>'
          f'<section><h2>Standorte</h2>{bar_rows(cities, len(js), str, lambda k: f"/staedte/{city_slug[k]}/" if k in cities_with_page else None, 8) if cities else "<p class=muted>Keine Stadt angegeben.</p>"}</section></div>'
-         f'<h2>Alle offenen Stellen bei {e(name)}</h2>{job_table(js, show_company=False)}{cta()}',
+         f'<h2>Alle offenen Stellen bei {e(name)}</h2>{job_table(js, show_company=False)}{similar_html(similar, top_city)}{cta()}',
          crumbs=[("Unternehmen", "/unternehmen/"), (name, None)],
          jsonld=[{"@context": "https://schema.org", "@type": "Organization", "name": name, **({"url": "https://" + js[0]["domain"]} if js[0].get("domain") and "." in js[0]["domain"] and "/" not in js[0]["domain"] and ":" not in js[0]["domain"] else {})}])
+
+
+def company_desc(name, js, top_city, cats):
+    """Snippet text: concrete job titles first (they match what people search), then the source; first variant that fits."""
+    ex = example_titles(js)
+    city = f", vor allem in {top_city}" if top_city else ""
+    head = lambda c: f"Stellenangebote bei {name}: {n(len(js))} offene Jobs{c}"  # noqa: E731
+    tail = " Direkt von der Karriereseite, wöchentlich aktualisiert."
+    fields = ", ".join([CAT_LABEL[k] for k, _ in cats.most_common(3) if k != "operations"][:2])
+    variants = []
+    if ex:
+        two, one = f", z. B. {' und '.join(ex)}.", f", z. B. {ex[0]}."
+        variants += [head(city) + two + tail, head(city) + one + tail, head(city) + two, head(city) + one, head("") + one]
+    if fields:
+        variants += [head(city) + f": {fields}." + tail, head(city) + f": {fields}."]
+    variants += [head(city) + "." + tail, head("") + "."]
+    return next((v for v in variants if len(v) <= 155), variants[-1])
+
+
+def city_desc(city, js, comp, names):
+    """Snippet text for a city: employers people know and concrete job titles, then the source; first variant that fits."""
+    head = f"Stellenangebote in {city}: {n(len(js))} offene Jobs bei {n(len(comp))} Arbeitgebern"
+    cos = [names[c] for c, _ in comp.most_common(3) if len(names[c]) <= 30][:2]
+    ex = example_titles(js)
+    tail = " Direkt von den Karriereseiten, wöchentlich aktualisiert."
+    parts = ([f", z. B. {' und '.join(cos)}."] if cos else []) + ([f" Gesucht u. a.: {' und '.join(ex)}."] if ex else [])
+    short = " Wöchentlich aktualisiert."
+    variants = [head + "".join(parts) + tail, head + "".join(parts) + short, head + "".join(parts),
+                *[head + p + t for p in parts for t in (tail, short, "")], head + "." + tail]
+    return next((v for v in variants if v and len(v) <= 155), head + ".")
+
+
+def similar_html(similar, top_city):
+    if not similar:
+        return ""
+    lis = "".join(f'<li><a href="/unternehmen/{o}/">{e(nm)}</a> <span class="muted">{n(k)} Stellen</span></li>' for o, nm, k, _ in similar)
+    head = f"Weitere Arbeitgeber in {e(top_city)}" if top_city and all(w == "city" for *_, w in similar) else "Ähnliche Arbeitgeber"
+    return f'<section class="similar"><h2>{head}</h2><ul class="cols">{lis}</ul></section>'
 
 
 def md_to_html(md):
@@ -882,6 +986,7 @@ def signals_page(jobs, names, date):
 <li>Monatlich kündbar, Zahlung per Rechnung</li>
 <li>Mehr Rollen oder Regionen: Preis nach Umfang</li></ul>
 <p><a class="btn" href="{e(mail)}">Erste Liste kostenlos anfordern</a></p></div></section></div>
+<aside class="note"><b>Lieber selbst abfragen?</b> Technische Teams holen sich dieselben Signale über die <a href="{CFG.get("indexActorUrl", CFG["actorUrl"])}" rel="noopener">DACH Jobs API</a> auf Apify: Die Ausgabe „companies“ liefert eine Zeile pro Unternehmen mit den passenden offenen Stellen, mit der Option „nur neue Stellen“ nur das, was seit dem letzten Abruf dazugekommen ist. Abrechnung: 0,01 US-$ pro Unternehmen, ohne Abo und ohne E-Mail an uns.</aside>
 <section><h2>So funktioniert es</h2><ol>
 <li>Sie nennen uns per E-Mail Ihre Zielrollen und Regionen.</li>
 <li>Sie erhalten eine kostenlose erste Liste und prüfen, ob sie Ihnen nützt.</li>
