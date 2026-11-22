@@ -1,0 +1,36 @@
+name: site-update
+# Code/text changes to the site, deployed without an AI article and without a new weekly snapshot (owner request 2026-11-22:
+# decouple article publishing from site updates). Runs on every push of generator code (sync_public.sh, owner-approved) and
+# on demand. Data stays as of the last weekly build: the Monday index refresh is unchanged, so fetching it again mid-week
+# yields the same week. Articles and snapshots are written only by weekly-build.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["data/**", "content/analysen/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency: { group: pages, cancel-in-progress: false }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Fetch the DACH Jobs API index (public, no token)
+        run: python3 fetch.py --index
+      - name: Build site (no snapshot, no article)
+        run: python3 build.py
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+  deploy:
+    if: vars.DEPLOY == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
