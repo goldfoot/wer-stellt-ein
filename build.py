@@ -27,6 +27,30 @@ DIST = ROOT / "dist"
 CFG = json.loads((ROOT / "site.json").read_text())
 BASE = CFG["baseUrl"].rstrip("/")
 
+# Apify affiliate (owner joined 2026-11-24): links to our Actors carry the referral ID, are marked with * and rel="sponsored",
+# and pages with such a link get a footer note (§ 5a Abs. 4 UWG: commercial purpose must be recognisable).
+AFF_ID = CFG.get("apifyAffiliateId", "")
+AFF_RE = re.compile(r'<a ([^>]*?)href="(https://apify\.com/[^"]*[?&]fpr=[^"]*)"([^>]*)>(.*?)</a>', re.S)
+AFF_NOTE = ('<p>* Partnerlink: Links zu Apify sind Affiliate-Links. Schließen Sie dort ein kostenpflichtiges Abo ab, erhalten wir eine Provision; '
+            'für Sie ändert sich am Preis nichts. Die verlinkten Tools auf Apify sind unsere eigenen.</p>')
+
+
+def aff_url(url):
+    return f'{url}{"&" if "?" in url else "?"}fpr={AFF_ID}' if AFF_ID and url.startswith("https://apify.com/") else url
+
+
+def mark_affiliate(html):
+    def sub(m):
+        pre, url, post, text = m.groups()
+        post = re.sub(r'\s*rel="[^"]*"', "", post)
+        return f'<a {pre}href="{url}" rel="sponsored noopener"{post}>{text}</a><sup class="aff" title="Partnerlink">*</sup>'
+    return AFF_RE.sub(sub, html)
+
+
+for _k in ("actorUrl", "indexActorUrl"):
+    if _k in CFG:
+        CFG[_k] = aff_url(CFG[_k])
+
 # ---------------------------------------------------------------- classification
 CITIES = {  # canonical name -> (country code, regex)
     "Berlin": ("DE", r"berlin"), "München": ("DE", r"m(ü|ue|u)nchen|munich"), "Hamburg": ("DE", r"hamburg"),
@@ -271,6 +295,8 @@ def page(path, title, desc, body, crumbs=(), jsonld=None):
         jsonld = [*(jsonld or []), bl]
     ld = "".join(f'<script type="application/ld+json">{json.dumps(x, ensure_ascii=False)}</script>' for x in (jsonld or []))
     robots = '<meta name="robots" content="noindex">' if CFG.get("noindex") else ""
+    body = mark_affiliate(body)
+    aff_note = AFF_NOTE if 'class="aff"' in body else ""
     doc = f"""<!DOCTYPE html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(title)}</title><meta name="description" content="{e(desc)}"><link rel="canonical" href="{url}">{robots}
@@ -280,7 +306,7 @@ def page(path, title, desc, body, crumbs=(), jsonld=None):
 <nav><a href="/jobs/">Bereiche</a><a href="/staedte/">Städte</a><a href="/unternehmen/">Unternehmen</a><a href="/ausbildung/">Ausbildung</a><a href="/werkstudent/">Werkstudent</a><a href="/analysen/">Analysen</a><a href="/hiring-signale/" class="cta-link">Hiring-Signale · ab 49 €</a></nav></div></header>
 <main class="wrap">{crumb_html}{body}</main>
 <footer><div class="wrap"><p>Daten: öffentliche Karriereseiten von {n(STATS["companies"])} Unternehmen, Stand {fmt_date(STATS["date"])}. Wöchentlich aktualisiert. <a href="/methodik/">Methodik</a> · <a href="/daten/">Daten-Download</a> · <a href="/impressum/">Impressum</a> · <a href="/datenschutz/">Datenschutz</a></p>
-<p>Alle Stellen verlinken direkt auf die Karriereseite des Unternehmens. Keine Gewähr für Vollständigkeit.</p></div></footer></body></html>"""
+<p>Alle Stellen verlinken direkt auf die Karriereseite des Unternehmens. Keine Gewähr für Vollständigkeit.</p>{aff_note}</div></footer></body></html>"""
     out = DIST / path.strip("/") / "index.html" if path.endswith("/") else DIST / path
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(doc)
