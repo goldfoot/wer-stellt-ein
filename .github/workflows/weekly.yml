@@ -1,7 +1,13 @@
 name: weekly-build
 on:
+  # Mondays after the DACH index refresh (05:00 UTC, ~20 min). GitHub starts scheduled runs late under load, worst on the full
+  # hour (16.11: +9.5 h, 23.11: +12 h), so there are several off-peak start times. Extra runs are harmless: the article and the
+  # snapshot of a data date are written once (write_article.py skips an existing week; the snapshot file is overwritten unchanged).
   schedule:
-    - cron: "0 7 * * 1"   # Mondays 07:00 UTC, after the DACH index refresh (Mondays 06:00 Europe/Berlin, ~30 min)
+    - cron: "41 5 * * 1"
+    - cron: "13 6 * * 1"
+    - cron: "47 6 * * 1"
+    - cron: "29 8 * * 1"
   workflow_dispatch:
     inputs:
       ping: { description: "Only test the Anthropic API connection (no article)", type: boolean, default: false }
