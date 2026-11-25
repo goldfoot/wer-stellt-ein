@@ -209,7 +209,7 @@ def load_snapshots():
 def write_snapshot(jobs, day):
     (DATA / "snapshots").mkdir(parents=True, exist_ok=True)
     compact = [{k: j[k] for k in ("uid", "company", "cat", "cities", "countries", "remote", "postedAt")} for j in jobs]
-    (DATA / "snapshots" / f"{day}.json.gz").write_bytes(gzip.compress(json.dumps(compact, separators=(",", ":")).encode()))
+    (DATA / "snapshots" / f"{day}.json.gz").write_bytes(gzip.compress(json.dumps(compact, separators=(",", ":")).encode(), mtime=0))  # mtime=0: reruns give identical bytes, no empty commits
 
 
 # ---------------------------------------------------------------- html helpers
