@@ -77,3 +77,8 @@ table.jobs td.nw::before{content:"· "}
 .grid2>*{min-width:0}
 @media(max-width:600px){.tiles{grid-template-columns:1fr 1fr;gap:8px}.tiles>*{padding:12px!important}}
 .note{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:20px 0;font-size:.95rem}
+/* trend sections (weekly history, 2026-11-27) */
+.trendbox{border:1px solid var(--line,#e3e1db);border-radius:10px;padding:14px 18px;margin:22px 0;background:#fff}
+.trendbox h2{margin-top:0}.trendbox h3{font-size:15px;margin:16px 0 6px}
+svg.trend{display:inline-block;vertical-align:middle;margin:4px 0 0 6px;overflow:visible}svg.trend rect{fill:#9cc9b0}svg.trend rect:last-of-type{fill:var(--acc2)}
+svg.trend text{font:11px system-ui,sans-serif;fill:#52514e}

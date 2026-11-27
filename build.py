@@ -206,6 +206,90 @@ def load_snapshots():
     return snaps
 
 
+HIST = []   # one entry per ISO week: (date, Counter company, Counter city, Counter category); only full-index snapshots
+TREND = {"prev_date": None, "prev_uids": set(), "removed_co": Counter(), "new_uids": set(), "prev_co": Counter(), "prev_co_city": Counter()}
+
+
+def load_history(snaps, jobs, date):
+    """Weekly history for trend sections. Snapshots with < 90 % of today's jobs came from the earlier, smaller crawl (14.11.2026: 37,260 jobs) and are skipped."""
+    weeks = {}
+    for d, s in snaps:
+        if len(s) >= 0.9 * len(jobs) and d <= date:
+            weeks[dt.date.fromisoformat(d).isocalendar()[:2]] = (d, s)
+    HIST.clear()
+    for d, s in sorted(weeks.values()):
+        HIST.append((d, Counter(j["company"] for j in s), Counter(c for j in s for c in j["cities"]), Counter(j["cat"] for j in s)))
+    if not HIST or HIST[-1][0] != date:  # today's data not yet snapshotted (local preview)
+        HIST.append((date, Counter(j["company"] for j in jobs), Counter(c for j in jobs for c in j["cities"]), Counter(j["cat"] for j in jobs)))
+    earlier = [(d, s) for d, s in snaps if d < date and len(s) >= 0.9 * len(jobs)]
+    if earlier:
+        pd, ps = earlier[-1]
+        cur = {j["uid"] for j in jobs}
+        prev_uids = {j["uid"] for j in ps}
+        TREND.update(prev_date=pd, prev_uids=prev_uids, new_uids=cur - prev_uids,
+                     removed_co=Counter(j["company"] for j in ps if j["uid"] not in cur),
+                     prev_co=Counter(j["company"] for j in ps), prev_co_city=Counter((j["company"], c) for j in ps for c in j["cities"]))
+
+
+def series(idx, key):
+    """[(date, count)] for a company (idx 1), city (2) or category (3) across the weekly history."""
+    return [(h[0], h[idx].get(key, 0)) for h in HIST]
+
+
+def trend_svg(points, label):
+    """Small column chart of weekly counts (≥ 3 weeks), value printed on the last column; text fallback below 3."""
+    if len(points) < 3:
+        return " → ".join(f"{fmt_date(d)}: <b>{n(v)}</b>" for d, v in points)
+    w, h, gap = 34, 70, 10
+    mx = max(v for _, v in points) or 1
+    bars = "".join(f'<rect x="{i * (w + gap)}" y="{h - max(2, v / mx * (h - 14))}" width="{w}" height="{max(2, v / mx * (h - 14))}" rx="3"><title>{fmt_date(d)}: {v}</title></rect>'
+                   for i, (d, v) in enumerate(points))
+    last = points[-1]
+    W = len(points) * (w + gap)
+    return (f'<svg class="trend" viewBox="0 -4 {W} {h + 22}" width="{W}" height="{h + 22}" role="img" aria-label="{e(label)}: '
+            + ", ".join(f"{fmt_date(d)} {v}" for d, v in points) + f'">{bars}'
+            f'<text x="{(len(points) - 1) * (w + gap) + w / 2}" y="{h - max(2, last[1] / mx * (h - 14)) - 4}" text-anchor="middle">{n(last[1])}</text>'
+            f'<text x="0" y="{h + 16}">{fmt_date(points[0][0])}</text><text x="{W - gap}" y="{h + 16}" text-anchor="end">{fmt_date(last[0])}</text></svg>')
+
+
+def company_trend(c, js):
+    """Unique content per employer: how the number of openings changes week by week, what is new and what was taken down."""
+    pts = series(1, c)
+    new = [j for j in js if j["uid"] in TREND["new_uids"]]
+    gone = TREND["removed_co"].get(c, 0)
+    if not TREND["prev_date"]:
+        return ""
+    since = fmt_date(TREND["prev_date"])
+    head = (f'<section class="trendbox"><h2>Entwicklung</h2><p>Offene Stellen pro Woche: {trend_svg(pts, "Offene Stellen pro Woche")}</p>'
+            f'<p>Seit {since}: <b>{n(len(new))} neu</b> ausgeschrieben, <b>{n(gone)}</b> nicht mehr online.</p>')
+    return head + (f'<h3>Neu seit {since}</h3>{job_table(new, show_company=False, limit=15)}' if new else "") + "</section>"
+
+
+def growth_table(items, names, link, limit=15):
+    """Ranking of employers by new openings since the previous week (only rows with at least one new opening)."""
+    rows = "".join(f'<tr><td>{i + 1}</td><td>{link(c)}</td><td class="r">{n(nw)}</td><td class="r">{delta(cur, prev)}</td></tr>'
+                   for i, (c, nw, cur, prev) in enumerate(items[:limit]))
+    return (f'<div class="tw"><table class="rank"><thead><tr><th>#</th><th>Arbeitgeber</th><th class="r">neue Stellen</th><th class="r">Δ offene Stellen</th></tr></thead><tbody>{rows}</tbody></table></div>'
+            if rows else '<p class="muted">Noch keine Vorwoche zum Vergleich.</p>')
+
+
+def group_by_company(js):
+    g = defaultdict(list)
+    for j in js:
+        g[j["company"]].append(j)
+    return g
+
+
+def growth_items(js_by_company, city=None):
+    """(company, new openings, open now, open in the previous week) – the previous count in the same scope (DACH or one city)."""
+    out = []
+    for c, js in js_by_company.items():
+        nw = sum(1 for j in js if j["uid"] in TREND["new_uids"])
+        if nw:
+            out.append((c, nw, len(js), TREND["prev_co_city"].get((c, city), 0) if city else TREND["prev_co"].get(c, 0)))
+    return sorted(out, key=lambda x: (-x[1], -x[2]))
+
+
 def write_snapshot(jobs, day):
     (DATA / "snapshots").mkdir(parents=True, exist_ok=True)
     compact = [{k: j[k] for k in ("uid", "company", "cat", "cities", "countries", "remote", "postedAt")} for j in jobs]
@@ -294,7 +378,8 @@ def page(path, title, desc, body, crumbs=(), jsonld=None):
             {"@type": "ListItem", "position": i + 1, "name": t, "item": f"{BASE}{h or path}"} for i, (t, h) in enumerate([("Start", "/"), *crumbs])]}
         jsonld = [*(jsonld or []), bl]
     ld = "".join(f'<script type="application/ld+json">{json.dumps(x, ensure_ascii=False)}</script>' for x in (jsonld or []))
-    robots = '<meta name="robots" content="noindex">' if CFG.get("noindex") else ""
+    idx = indexable(path) and not CFG.get("noindex")
+    robots = '<meta name="robots" content="noindex">' if CFG.get("noindex") else ("" if idx else '<meta name="robots" content="noindex,follow">')
     body = mark_affiliate(body)
     aff_note = AFF_NOTE if 'class="aff"' in body else ""
     doc = f"""<!DOCTYPE html>
@@ -310,7 +395,7 @@ def page(path, title, desc, body, crumbs=(), jsonld=None):
     out = DIST / path.strip("/") / "index.html" if path.endswith("/") else DIST / path
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(doc)
-    if not CFG.get("noindex") and path not in ("/impressum/", "/datenschutz/"):
+    if idx and path not in ("/impressum/", "/datenschutz/"):
         SITEMAP.append(url)
 
 
@@ -359,6 +444,26 @@ def cta(context=""):
 
 # ---------------------------------------------------------------- pages
 SITEMAP = []
+# Index policy (owner "go wse-quality", 2026-11-27, analysis projects/wer-stellt-ein/INDEX-DROP-2026-11.md): Google demoted the
+# site for ~4,300 near-template pages. Only a strong core stays indexable; every other page is still built for visitors and
+# linked internally, but carries noindex,follow and stays out of the sitemap.
+CORE_COMPANY_JOBS = 25   # employers with at least this many jobs keep an indexable page
+CORE_CITIES_N = 30       # the N largest cities keep an indexable page
+CORE = {"cos": set(), "cities": set()}
+INDEX_ALWAYS = {"/", "/unternehmen/", "/jobs/", "/staedte/", "/ausbildung/", "/werkstudent/", "/analysen/", "/hiring-signale/", "/methodik/", "/daten/"}
+
+
+def indexable(path):
+    if path in INDEX_ALWAYS or path.startswith("/analysen/"):
+        return True
+    m = re.fullmatch(r"/unternehmen/([^/]+)/", path)
+    if m:
+        return m.group(1) in CORE["cos"]
+    m = re.fullmatch(r"/staedte/([^/]+)/", path)
+    if m:
+        return m.group(1) in CORE["cities"]
+    return bool(re.fullmatch(r"/jobs/[^/]+/", path))  # category hubs yes; category × city, regions, ATS, Ausbildung/Werkstudent per city no
+
 STATS = {}
 USED_TITLES = set()
 IS_NEW = [lambda j: False]
@@ -426,6 +531,8 @@ def build(jobs, snaps, data_date=None):
     PAGE_COS.clear()
     PAGE_COS.update(c for c, js in by_company.items() if len(js) >= MIN_COMPANY_JOBS)
     date = data_date or (snaps[-1][0] if snaps else TODAY.isoformat())
+    load_history(snaps, jobs, date)
+    CORE["cos"] = {c for c, js in by_company.items() if len(js) >= CORE_COMPANY_JOBS}
     STATS.update(date=date, companies=len(by_company), jobs=len(jobs), tech=len(tech), month=month_label(date))
     mon = STATS["month"]
     names = {c: js[0]["companyName"] for c, js in by_company.items()}
@@ -437,6 +544,7 @@ def build(jobs, snaps, data_date=None):
     city_tech = Counter(c for j in tech for c in j["cities"])
     cities_with_page = [c for c, v in city_count.most_common() if v >= MIN_COMBO_JOBS]
     city_slug = {c: slugify(c) for c in city_count}
+    CORE["cities"] = {city_slug[c] for c in cities_with_page[:CORE_CITIES_N]}
     country_of = lambda c: CITY_COUNTRY.get(c) or CITIES.get(c, ("DE", ""))[0]  # noqa: E731
     ats_companies = defaultdict(set)
     for j in jobs:
@@ -477,6 +585,8 @@ def build(jobs, snaps, data_date=None):
 <div class="grid2"><section><h2>Tech: wer sucht die meisten Tech-Leute?</h2>
 <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Unternehmen</th><th class="r">Tech-Stellen</th><th class="r">Δ Woche</th></tr></thead><tbody>{tech_rows}</tbody></table></div></section>
 <section><h2>Tech-Bereiche</h2>{bar_rows(Counter(j["cat"] for j in tech), len(tech), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}</section></div>
+<section><h2>Wer stellt gerade zusätzlich ein?</h2><p class="muted">Arbeitgeber mit den meisten neu ausgeschriebenen Stellen seit {fmt_date(TREND["prev_date"]) if TREND["prev_date"] else "der Vorwoche"} (Vergleich der wöchentlichen Auslesung).</p>
+{growth_table(growth_items(by_company), names, lambda c: f'<a href="/unternehmen/{c}/">{e(names[c])}</a>' if c in PAGE_COS else e(names[c]))}</section>
 <section><h2>Neu diese Woche</h2>{job_table(new_week, limit=30) if new_week else '<p class="muted">Noch keine Daten.</p>'}</section>
 {cta()}"""
     page("/", fit_title(f"Wer stellt ein? {n(len(jobs))} offene Stellen in DACH ({mon})", f"Wer stellt ein? {n(len(jobs))} offene Stellen in DACH"),
@@ -579,7 +689,9 @@ def build(jobs, snaps, data_date=None):
                  f"{n(sum(1 for j in js if j['track']))} Ausbildungs-, Werkstudenten- oder Praktikumsplätze ({pct_of(js, lambda j: j['track']):.0f} %, DACH: {BASE_TRACK:.0f} %)." if any(j["track"] for j in js) else "",
              ]) + f'<div class="grid2"><section><h2>Arbeitgeber mit den meisten Stellen</h2>{bar_rows(comp, len(js), names.get, co_link, 15)}</section>'
              f'<section><h2>Bereiche</h2>{bar_rows(Counter(j["cat"] for j in js), len(js), CAT_LABEL.get, lambda k: f"/jobs/{k}/{city_slug[city]}/" if (DIST / "jobs" / k / city_slug[city]).exists() else None, 14)}</section></div>'
-             f'<h2>Neueste Stellen in {e(city)}</h2>{job_table(js, limit=100)}{cta("Rollen in " + city)}',
+             + (f'<section class="trendbox"><h2>Wer stellt in {e(city)} gerade zusätzlich ein?</h2><p>Offene Stellen in {e(city)} pro Woche: {trend_svg(series(2, city), "Offene Stellen pro Woche")}</p>'
+                f'{growth_table(growth_items(group_by_company(js), city), names, lambda c: f"<a href=/unternehmen/{c}/>{e(names[c])}</a>" if c in PAGE_COS else e(names[c]), 10)}</section>' if TREND["prev_date"] else "")
+             + f'<h2>Neueste Stellen in {e(city)}</h2>{job_table(js, limit=100)}{cta("Rollen in " + city)}',
              crumbs=[("Städte", "/staedte/"), (city, None)])
     page("/staedte/", fit_title(f"Jobs nach Stadt: {len(cities_with_page)} Städte in DACH"), "Offene Stellen nach Stadt in Deutschland, Österreich und der Schweiz: Berlin, München, Hamburg, Wien, Zürich und mehr.",
          f'<h1>Offene Stellen nach Stadt</h1><p class="lead">{len(cities_with_page)} Städte mit mindestens {MIN_COMBO_JOBS} offenen Stellen. Stellen ohne erkennbare Stadt (nur Region oder Remote) zählen nur in den Bereichen. Übersicht nach <a href="/regionen/">Bundesland und Kanton</a>.</p>'
@@ -704,7 +816,7 @@ def build(jobs, snaps, data_date=None):
     if CFG.get("cname"):
         (DIST / "CNAME").write_text(CFG["cname"] + "\n")
     (DIST / ".nojekyll").write_text("")
-    print(f"built {len(SITEMAP)} pages · {n(len(jobs))} jobs · {n(len(tech))} tech · {len(by_company)} companies ({len(PAGE_COS)} with page)")
+    print(f"built {sum(1 for _ in DIST.rglob('index.html'))} pages ({len(SITEMAP)} indexable, in sitemap) · {n(len(jobs))} jobs · {n(len(tech))} tech · {len(by_company)} companies ({len(PAGE_COS)} with page)")
 
 
 def short_title(t):
@@ -787,6 +899,7 @@ def company_page(c, js, prev, city_slug, cities_with_page=(), similar=()):
          f'<h1>Stellt {e(name)} ein?</h1><p class="lead">{" ".join(facts)}</p>'
          f'<div class="grid2"><section><h2>Bereiche</h2>{bar_rows(cats, len(js), CAT_LABEL.get, lambda k: f"/jobs/{k}/")}</section>'
          f'<section><h2>Standorte</h2>{bar_rows(cities, len(js), str, lambda k: f"/staedte/{city_slug[k]}/" if k in cities_with_page else None, 8) if cities else "<p class=muted>Keine Stadt angegeben.</p>"}</section></div>'
+         + company_trend(c, js) +
          f'<h2>Alle offenen Stellen bei {e(name)}</h2>{job_table(js, show_company=False)}{similar_html(similar, top_city)}{cta()}',
          crumbs=[("Unternehmen", "/unternehmen/"), (name, None)],
          jsonld=[{"@context": "https://schema.org", "@type": "Organization", "name": name, **({"url": "https://" + js[0]["domain"]} if js[0].get("domain") and "." in js[0]["domain"] and "/" not in js[0]["domain"] and ":" not in js[0]["domain"] else {})}])
